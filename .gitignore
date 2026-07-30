@@ -45,6 +45,7 @@ dddmr_navigation/
 
 # Isaac Sim / Isaac Lab runtime output
 /.isaac-cache/
+/.runtime/
 /.pretrained_checkpoints/
 /.pretrained_checkpoints
 /outputs/

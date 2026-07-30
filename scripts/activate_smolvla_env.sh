@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 
 _M20PRO_SMOLVLA_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export M20PRO_SIM_WS="$(cd "${_M20PRO_SMOLVLA_SCRIPT_DIR}/.." && pwd)"
-
-export M20PRO_VLA_DATA_ROOT="${M20PRO_VLA_DATA_ROOT:-/media/fabu/b9cbb43d-5119-4328-99d9-10f7c0d91e37/M20ProVLA}"
+source "${_M20PRO_SMOLVLA_SCRIPT_DIR}/activate_vla_env.sh"
 export M20PRO_SMOLVLA_ENV_PREFIX="${M20PRO_SMOLVLA_ENV_PREFIX:-${M20PRO_VLA_DATA_ROOT}/envs/m20pro-smolvla}"
-export M20PRO_ISAAC_ENV_PREFIX="${M20PRO_ISAAC_ENV_PREFIX:-${HOME}/miniconda3/envs/m20pro-vla}"
+export M20PRO_ISAAC_ENV_PREFIX="${M20PRO_ISAAC_ENV_PREFIX:-${CONDA_PREFIX}}"
 
 _M20PRO_SMOLVLA_SITE="${M20PRO_SMOLVLA_ENV_PREFIX}/lib/python3.11/site-packages"
 _M20PRO_ISAAC_SITE="${M20PRO_ISAAC_ENV_PREFIX}/lib/python3.11/site-packages"

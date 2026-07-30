@@ -634,5 +634,26 @@ python scripts/play_m20_vla_skill.py --headless --video \
 
 - 同步仓库：`git@github.com:ghw1048040694/VLA-Learning.git`
 - 本地克隆路径：`/home/fabu/桌面/VLA-Learning`
-- 本文件在仓库中作为独立的 `m20pro-VLA.md`，不覆盖仓库原有的 `lerobot/Lerobot.md`。
+- 本文件在仓库中作为独立的 `m20pro-VLA.md`，不覆盖工作区的总学习日志
+  `notes/Lerobot.md`。
 - 后续每次更新本文件后，同步复制到该仓库并提交推送。
+
+### MuJoCo-first 重启与 WSL Isaac 清理（2026-07-30）
+
+- 用户明确决定不把 Isaac Sim 作为 M20 VLA 的主训练环境。当前架构为 WSL
+  MuJoCo 主训练/闭环验收，Windows `D:\isaacsim` 的 Isaac Sim
+  `6.0.1-rc.7` 仅在 MuJoCo 门禁通过后执行 sim2sim 验证。
+- 曾错误开始下载 WSL Linux Isaac Sim 5.1/Isaac Lab；已停止且彻底清理：卸载
+  三个 `isaacsim-extscache` 包，删除 IsaacLab 源码、wheel 与 pip 中断缓存。
+  根分区使用量由约 `84 GB` 降至 `67 GB`，可用空间约 `890 GB`；保留的
+  `m20pro-vla` 环境约 `6.9 GB`，仅含 PyTorch/CUDA 与 MuJoCo 所需依赖。
+- 固定 MuJoCo `3.3.7`、PyTorch `2.7.0+cu128`、Python `3.11.15` 已验证：
+  CUDA 可用，空 MuJoCo 模型可完成一步物理计算。
+- M20 ROS URDF 已经 MuJoCo 编译为 MJCF：原始 `16` 关节均被识别。随后增加
+  浮动基座、地面与 `12` 个腿部位置/`4` 个轮部速度执行器；动态模型为
+  `17` joints、`nq=23`、`nv=22`、`nu=16`，`480` 个 `2.5 ms` 步后状态有限，
+  机身高度约 `0.588 m`。这只是资产接口验收，不是步态或导航结果。
+- 多物体观测 smoke test 已以实际 RGB 检查通过：前相机可见红方块和绿圆柱，
+  后相机可见黄方块；LiDAR 为 72 线、有效范围 `2.92--5.68 m`，本体输入为
+  `qpos/qvel` 45 维。策略输入合同明确禁止目标世界坐标、对象 ID、语义掩码和
+  仿真物体位姿。当前尚未采集新训练数据、训练 VLA/低层策略或运行闭环导航。

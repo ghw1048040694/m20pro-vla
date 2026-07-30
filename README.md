@@ -77,49 +77,35 @@ src/m20pro_navigation/m20pro_navigation/dynamic_obstacle_simulator.py
 - 仿真沿用 `/m20pro_tcp_bridge/...` 话题命名，是为了让网页和任务逻辑与真机接口形状一致。
 - `m20pro日志.md` 保留了历史开发记录，其中会提到 real 内容；新的真机开发请到 real 仓库继续。
 
-## VLA 具身仿真环境
+## VLA 具身仿真环境（当前主线）
 
-Isaac Sim/Isaac Lab 环境与 ROS 2 Humble 环境分开管理：
+M20 VLA 采用 MuJoCo-first：WSL 内的 MuJoCo 负责快速训练、数据采集和
+闭环验收；Windows 的 `D:\isaacsim`（Isaac Sim 6.0.1-rc.7）只在 MuJoCo
+门禁通过后用于 sim2sim 验证。Windows 运行时不会被 WSL Python 导入，也不在
+WSL 内重复安装 Isaac Sim/Isaac Lab。
 
 ```bash
 ./scripts/install_vla_env.sh
 source ./scripts/activate_vla_env.sh
 ./scripts/check_vla_env.sh
+python scripts/prepare_m20_mujoco_asset.py
+python scripts/build_m20_mujoco_model.py
+python scripts/m20_mujoco_observation_smoke.py
 ```
 
-固定版本为 Python 3.11、Isaac Sim 5.1.0、Isaac Lab 2.3.2、PyTorch
-2.7.0/CUDA 12.8 和 RSL-RL。本地 Isaac Lab 源码与仿真缓存位于已忽略的
-`.deps/` 和 `.isaac-cache/`，不提交到仓库。RTX 3060 12GB 启动 Isaac
-Sim 前应先停止其他 GPU 训练进程。
+固定运行时为 Python 3.11、MuJoCo 3.3.7 和 PyTorch 2.7.0/CUDA 12.8。
+`scripts/m20_mujoco_observation_smoke.py` 生成前后 RGB、72 线 LiDAR、
+`qpos/qvel` 和语言指令；策略输入严禁包含目标坐标、语义掩码或仿真物体位姿。
+运行产物均在忽略的 `.runtime/` 下。
 
-### M20 Pro Isaac Lab 资产
+### 当前验收边界
 
-从 URDF 生成本地 USD，然后运行 2 秒无界面物理测试：
+当前完成的是环境与观测合同，不是导航、VLA、world model 或 sim2sim 成功。
+后续训练仅使用随机多物体场景的 RGB、LiDAR、本体状态和语言；每次闭环验收
+必须保存 H.264 视频、逐 episode JSON 与独立随机布局汇总。项目记录位于
+[`m20pro-VLA.md`](m20pro-VLA.md)。
 
-```bash
-./scripts/convert_m20pro_urdf.sh
-./scripts/test_m20pro_asset.sh
-```
-
-`assets/m20pro/m20pro_cfg.py` 定义了 Isaac Lab 资产。腿部 12 个关节使用
-DC motor 模型，4 个轮关节使用速度型隐式执行器。生成的 USD 及派生
-网格位于 `assets/m20pro/` 且不纳入 Git。
-
-### 第一个可训练任务
-
-`tasks/m20pro_locomotion/` 是平地轮腿移动基线：16 维关节力矩动作、
-60 维本体观测、+X 方向进度奖励，默认 64 并行环境（适配 RTX 3060）。先用它验证训练链路，再加入
-激光雷达、前后相机、障碍物和语言条件：
-
-```bash
-source scripts/activate_vla_env.sh
-TERM=xterm python scripts/check_m20pro_task.py --headless
-./scripts/smoke_m20pro_locomotion.sh --num-envs 1 --steps 4
-```
-
-VLA 兴趣项目的持续记录位于 [`m20pro-VLA.md`](m20pro-VLA.md)，每次本项目对话后更新。
-
-### 预训练 SmolVLA 基线
+### 历史 Isaac/SmolVLA 路径（不作为当前主线）
 
 旧的小型 CNN/字节文本行为克隆网络只保留为 M20 低层运动基线，不再作为
 VLA 主线。新的高层策略使用官方 `lerobot/smolvla_base`（固定 revision
