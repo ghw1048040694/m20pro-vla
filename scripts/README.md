@@ -1,6 +1,56 @@
 # M20Pro Sim Scripts
 
+The user-facing MuJoCo entry point is now the installed `m20pro-vla` command.
+Install the package once in the project environment:
+
+```bash
+python -m pip install -e . --no-deps
+```
+
+The first migrated lifecycle commands are:
+
+```bash
+m20pro-vla doctor
+m20pro-vla prepare
+m20pro-vla smoke
+m20pro-vla low-level-gate
+m20pro-vla collect --mode randomized --episodes 1
+m20pro-vla train --help
+m20pro-vla eval --help
+m20pro-vla play --help
+m20pro-vla report
+```
+
+Each non-dry run creates `.runtime/runs/<run-id>/` with `config.json`,
+`command.txt`, `status.json`, `summary.json`, and reserved `dataset/`,
+`checkpoints/`, `videos/`, and `logs/` directories. Use `--dry-run` to check
+the plan without creating artifacts. The existing files below remain
+compatibility entry points while collection, training, evaluation, and
+playback are migrated into package APIs. The adapters stream logs into the
+run directory and preserve the wrapped process exit code.
+
 These scripts are local simulation helpers. They do not SSH to 104, install systemd units, record real bags, or control the robot.
+
+## Script ownership
+
+The compatibility MuJoCo-first VLA and low-level implementations are grouped
+in `scripts/mujoco/`; invoke them through `m20pro-vla` for new work:
+
+```text
+scripts/mujoco/
+  prepare_m20_mujoco_asset.py       # build the local MuJoCo asset
+  build_m20_mujoco_model.py         # compile/validate the model
+  smoke_m20_mujoco.py               # sensor and scene smoke test
+  evaluate_m20_low_level_controller.py
+  collect_m20_mujoco_vla.py         # dataset collection
+  train_m20_mujoco_vla.py           # compact VLA training
+  play_m20_mujoco_vla.py            # closed-loop replay
+```
+
+The same filenames under `scripts/` are compatibility entry points for old
+commands. New code and documentation should use the grouped paths. The other
+root scripts are retained legacy ROS/Isaac Lab/data commands until their
+workflow is migrated and independently verified.
 
 ```bash
 ./scripts/start_sim.sh true
@@ -114,6 +164,19 @@ python3 scripts/build_m20_objectnav_manifest.py
 ./scripts/collect_m20_visible_objectnav.sh train_0000
 ./scripts/audit_m20_smolvla_data.sh
 ```
+
+The hidden-search variant uses the same robot and camera contract but adds an
+occluding screen so the target is not visible at the start:
+
+```bash
+python3 scripts/build_m20_objectnav_manifest.py --include-hidden-search
+./scripts/collect_m20_hidden_objectnav.sh hidden_train_0000
+./scripts/convert_m20_hidden_objectnav_to_lerobot.sh
+./scripts/train_m20_smolvla_hidden_objectnav.sh
+```
+
+The hidden manifest currently spans 4 occluder families so the search data do
+not collapse to a single screen shape or lane geometry.
 
 For a reproducible coverage run, pass several manifest IDs to the batch wrapper.
 It records one log per episode and runs the audit after every completed episode:

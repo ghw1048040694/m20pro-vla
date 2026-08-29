@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Write the canonical M20 visible ObjectNav scenario manifest."""
+"""Write the canonical M20 ObjectNav scenario manifest."""
 
 from __future__ import annotations
 
@@ -16,11 +16,23 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "configs/m20_visible_objectnav_scenarios_v1.json",
+        default=None,
     )
     parser.add_argument("--seed", type=int, default=20260723)
+    parser.add_argument(
+        "--include-hidden-search",
+        action="store_true",
+        help="Build the hidden-search variant with occluding geometry and occluded targets.",
+    )
     args = parser.parse_args()
-    manifest = build_manifest(args.seed)
+    if args.output is None:
+        output_name = (
+            "configs/m20_hidden_objectnav_scenarios_v1.json"
+            if args.include_hidden_search
+            else "configs/m20_visible_objectnav_scenarios_v1.json"
+        )
+        args.output = Path(__file__).resolve().parents[1] / output_name
+    manifest = build_manifest(args.seed, include_hidden_search=args.include_hidden_search)
     summary = validate_manifest(manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

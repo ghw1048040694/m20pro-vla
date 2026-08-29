@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Convert audited M20 visible ObjectNav episodes to LeRobot.
+"""Convert audited M20 ObjectNav episodes to LeRobot.
 
 The SmolVLA base checkpoint accepts a 32-dimensional state.  v2 uses eight
 body-frame proprioceptive values and compresses the 72-beam indoor LiDAR into
@@ -63,6 +63,29 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--repo-id", default="m20pro_visible_objectnav_v5_camera12_stop08"
+    )
+    parser.add_argument(
+        "--task-type-filter",
+        choices=("visible_object_navigation", "hidden_object_search"),
+        default="visible_object_navigation",
+        help="Select whether to convert visible navigation or hidden-search episodes.",
+    )
+    parser.add_argument(
+        "--candidate-split",
+        default="train",
+        help="Audit split to convert. Visible defaults to train; hidden-search uses hidden_train.",
+    )
+    parser.add_argument(
+        "--require-audit-ready",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Require the audit readiness gate before conversion.",
+    )
+    parser.add_argument(
+        "--require-exact-scenario-set",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Require the audit candidate set to match the canonical visible source ids.",
     )
     parser.add_argument("--max-episodes", type=int, default=0)
     parser.add_argument(
@@ -210,7 +233,15 @@ def canonicalize_stop_labels(
     return canonical, diagnostics
 
 
-def eligible_paths(input_root: Path, audit_path: Path) -> tuple[list[dict], str]:
+def eligible_paths(
+    input_root: Path,
+    audit_path: Path,
+    *,
+    candidate_split: str,
+    task_type_filter: str,
+    require_audit_ready: bool,
+    require_exact_scenario_set: bool,
+) -> tuple[list[dict], str]:
     audit_bytes = audit_path.read_bytes()
     audit_sha256 = hashlib.sha256(audit_bytes).hexdigest()
     audit = json.loads(audit_bytes.decode("utf-8"))
@@ -229,31 +260,46 @@ def eligible_paths(input_root: Path, audit_path: Path) -> tuple[list[dict], str]
             f"Audit/input root mismatch: audit={audit_root}, input={requested_input_root}"
         )
 
-    required_gates = (
-        "minimum_train_scenes_8",
-        "minimum_object_categories_12",
-        "minimum_instruction_templates_24",
-        "all_candidates_valid_and_timestamp_aligned",
-        "scene_geometry_visible_to_lidar",
-        "six_dimensional_action_labels_present",
-    )
-    visible_gates = audit.get("visible_objectnav_gates", {})
-    failed_gates = [
-        name for name in required_gates if visible_gates.get(name) is not True
-    ]
-    if (
-        audit.get("ready_for_visible_objectnav_finetune") is not True
-        or failed_gates
-    ):
-        raise RuntimeError(
-            "Source audit is not ready for visible ObjectNav fine-tuning: "
-            + ", ".join(failed_gates)
-        )
+    if require_audit_ready:
+        if task_type_filter == "hidden_object_search":
+            required_gates = (
+                "minimum_train_scenes_8",
+                "minimum_object_categories_12",
+                "minimum_instruction_templates_24",
+                "all_hidden_candidates_valid_and_timestamp_aligned",
+                "search_required_and_occluded_at_start",
+                "scene_geometry_visible_to_lidar",
+                "six_dimensional_action_labels_present",
+                "hidden_search_success_present",
+            )
+            gate_source = audit.get("hidden_object_search_gates", {})
+            ready_key = "ready_for_hidden_object_search_finetune"
+        else:
+            required_gates = (
+                "minimum_train_scenes_8",
+                "minimum_object_categories_12",
+                "minimum_instruction_templates_24",
+                "all_candidates_valid_and_timestamp_aligned",
+                "scene_geometry_visible_to_lidar",
+                "six_dimensional_action_labels_present",
+            )
+            gate_source = audit.get("visible_objectnav_gates", {})
+            ready_key = "ready_for_visible_objectnav_finetune"
+        failed_gates = [
+            name for name in required_gates if gate_source.get(name) is not True
+        ]
+        if audit.get(ready_key) is not True or failed_gates:
+            raise RuntimeError(
+                "Source audit is not ready for ObjectNav fine-tuning: "
+                + ", ".join(failed_gates)
+            )
 
     candidates = [
         item
         for item in audit.get("episodes", [])
-        if item.get("smolvla_candidate") and item.get("split") == "train"
+        if item.get("smolvla_candidate")
+        and item.get("split") == candidate_split
+        and item.get("task_type") == task_type_filter
     ]
     rejected = [
         item["path"]
@@ -291,13 +337,16 @@ def eligible_paths(input_root: Path, audit_path: Path) -> tuple[list[dict], str]
             + ", ".join(duplicate_scenario_ids)
         )
     actual_scenario_ids = set(scenario_ids)
-    if actual_scenario_ids != EXPECTED_V5_SCENARIO_IDS:
-        missing = sorted(EXPECTED_V5_SCENARIO_IDS - actual_scenario_ids)
-        unexpected = sorted(actual_scenario_ids - EXPECTED_V5_SCENARIO_IDS)
-        raise ValueError(
-            "Audit scenario set does not match the v5 source set: "
-            f"missing={missing}, unexpected={unexpected}"
-        )
+    if require_exact_scenario_set and task_type_filter == "visible_object_navigation":
+        if actual_scenario_ids != EXPECTED_V5_SCENARIO_IDS:
+            missing = sorted(EXPECTED_V5_SCENARIO_IDS - actual_scenario_ids)
+            unexpected = sorted(actual_scenario_ids - EXPECTED_V5_SCENARIO_IDS)
+            raise ValueError(
+                "Audit scenario set does not match the v5 source set: "
+                f"missing={missing}, unexpected={unexpected}"
+            )
+    elif not actual_scenario_ids:
+        raise RuntimeError("No audited SmolVLA-eligible episodes found")
 
     entries = []
     for item in sorted(candidates, key=lambda value: value["path"]):
@@ -434,7 +483,14 @@ def convert(args: argparse.Namespace) -> dict:
             f"Output exists; pass --force to replace: {args.output_root}"
         )
 
-    audited_entries, source_audit_sha256 = eligible_paths(args.input_root, args.audit)
+    audited_entries, source_audit_sha256 = eligible_paths(
+        args.input_root,
+        args.audit,
+        candidate_split=args.candidate_split,
+        task_type_filter=args.task_type_filter,
+        require_audit_ready=args.require_audit_ready,
+        require_exact_scenario_set=args.require_exact_scenario_set,
+    )
     entries = audited_entries
     if args.max_episodes > 0:
         entries = entries[: args.max_episodes]
@@ -639,10 +695,16 @@ def convert(args: argparse.Namespace) -> dict:
         }
     )
     conversion = {
-        "schema": "m20pro_visible_objectnav_lerobot_v3",
+        "schema": (
+            "m20pro_hidden_objectnav_lerobot_v1"
+            if args.task_type_filter == "hidden_object_search"
+            else "m20pro_visible_objectnav_lerobot_v3"
+        ),
         "source_audit": str(args.audit),
         "source_audit_sha256": source_audit_sha256,
         "repo_id": args.repo_id,
+        "task_type_filter": args.task_type_filter,
+        "candidate_split": args.candidate_split,
         "episode_count": len(manifest),
         "frames": sum(item["frames"] for item in manifest),
         "fps": 50,

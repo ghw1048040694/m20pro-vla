@@ -20,7 +20,7 @@ if [[ ! -x "${ENV_PYTHON}" ]]; then
 fi
 
 "${ENV_PYTHON}" -m pip install --upgrade pip "setuptools==80.9.0" "wheel==0.45.1"
-"${ENV_PYTHON}" -m pip install "mujoco==3.3.7" "PyYAML==6.0.2"
+"${ENV_PYTHON}" -m pip install "mujoco==3.3.7" "onnxruntime==1.27.0" "PyYAML==6.0.2" "imageio-ffmpeg==0.6.0" "opencv-python-headless==4.10.0.84" "h5py==3.14.0"
 
 "${ENV_PYTHON}" - <<'PY'
 import mujoco

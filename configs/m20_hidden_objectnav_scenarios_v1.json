@@ -1,0 +1,5534 @@
+{
+  "schema": "m20pro_hidden_objectnav_scenarios_v1",
+  "seed": 20260723,
+  "simulation_only": true,
+  "asset_root": "{ISAAC_NUCLEUS_DIR}",
+  "object_catalog": [
+    {
+      "id": "master_chef_can",
+      "label_zh": "主厨罐头",
+      "label_en": "master chef can",
+      "usd_path": "Props/YCB/Axis_Aligned/002_master_chef_can.usd",
+      "uniform_scale": 4.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "cracker_box",
+      "label_zh": "苏打饼干盒",
+      "label_en": "cracker box",
+      "usd_path": "Props/YCB/Axis_Aligned/003_cracker_box.usd",
+      "uniform_scale": 3.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "sugar_box",
+      "label_zh": "糖盒",
+      "label_en": "sugar box",
+      "usd_path": "Props/YCB/Axis_Aligned/004_sugar_box.usd",
+      "uniform_scale": 3.2,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "tomato_soup_can",
+      "label_zh": "番茄汤罐头",
+      "label_en": "tomato soup can",
+      "usd_path": "Props/YCB/Axis_Aligned/005_tomato_soup_can.usd",
+      "uniform_scale": 5.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "mustard_bottle",
+      "label_zh": "芥末瓶",
+      "label_en": "mustard bottle",
+      "usd_path": "Props/YCB/Axis_Aligned/006_mustard_bottle.usd",
+      "uniform_scale": 3.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "tuna_fish_can",
+      "label_zh": "金枪鱼罐头",
+      "label_en": "tuna fish can",
+      "usd_path": "Props/YCB/Axis_Aligned/007_tuna_fish_can.usd",
+      "uniform_scale": 7.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "pudding_box",
+      "label_zh": "布丁盒",
+      "label_en": "pudding box",
+      "usd_path": "Props/YCB/Axis_Aligned/008_pudding_box.usd",
+      "uniform_scale": 4.5,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "gelatin_box",
+      "label_zh": "果冻盒",
+      "label_en": "gelatin box",
+      "usd_path": "Props/YCB/Axis_Aligned/009_gelatin_box.usd",
+      "uniform_scale": 5.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "potted_meat_can",
+      "label_zh": "午餐肉罐头",
+      "label_en": "potted meat can",
+      "usd_path": "Props/YCB/Axis_Aligned/010_potted_meat_can.usd",
+      "uniform_scale": 5.5,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "banana",
+      "label_zh": "香蕉",
+      "label_en": "banana",
+      "usd_path": "Props/YCB/Axis_Aligned/011_banana.usd",
+      "uniform_scale": 3.0,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "pitcher",
+      "label_zh": "水壶",
+      "label_en": "pitcher",
+      "usd_path": "Props/YCB/Axis_Aligned/019_pitcher_base.usd",
+      "uniform_scale": 2.5,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    },
+    {
+      "id": "bleach_cleanser",
+      "label_zh": "清洁剂瓶",
+      "label_en": "bleach cleanser bottle",
+      "usd_path": "Props/YCB/Axis_Aligned/021_bleach_cleanser.usd",
+      "uniform_scale": 2.4,
+      "source": "NVIDIA Isaac Sim 5.1 YCB",
+      "license": "YCB dataset terms"
+    }
+  ],
+  "instruction_templates": [
+    {
+      "id": "zh_00",
+      "language": "zh",
+      "text": "到{object_zh}那里去"
+    },
+    {
+      "id": "zh_01",
+      "language": "zh",
+      "text": "走到{object_zh}旁边"
+    },
+    {
+      "id": "zh_02",
+      "language": "zh",
+      "text": "去找{object_zh}"
+    },
+    {
+      "id": "zh_03",
+      "language": "zh",
+      "text": "导航到{object_zh}"
+    },
+    {
+      "id": "zh_04",
+      "language": "zh",
+      "text": "前往放着{object_zh}的地方"
+    },
+    {
+      "id": "zh_05",
+      "language": "zh",
+      "text": "靠近{object_zh}"
+    },
+    {
+      "id": "zh_06",
+      "language": "zh",
+      "text": "请带我到{object_zh}附近"
+    },
+    {
+      "id": "zh_07",
+      "language": "zh",
+      "text": "找到{object_zh}并在它旁边停下"
+    },
+    {
+      "id": "zh_08",
+      "language": "zh",
+      "text": "向{object_zh}的位置前进"
+    },
+    {
+      "id": "zh_09",
+      "language": "zh",
+      "text": "去有{object_zh}的位置"
+    },
+    {
+      "id": "zh_10",
+      "language": "zh",
+      "text": "请在{object_zh}前面停下"
+    },
+    {
+      "id": "zh_11",
+      "language": "zh",
+      "text": "找一下{object_zh}在哪里并走过去"
+    },
+    {
+      "id": "en_00",
+      "language": "en",
+      "text": "go to the {object_en}"
+    },
+    {
+      "id": "en_01",
+      "language": "en",
+      "text": "walk over to the {object_en}"
+    },
+    {
+      "id": "en_02",
+      "language": "en",
+      "text": "find the {object_en}"
+    },
+    {
+      "id": "en_03",
+      "language": "en",
+      "text": "navigate to the {object_en}"
+    },
+    {
+      "id": "en_04",
+      "language": "en",
+      "text": "move to the place with the {object_en}"
+    },
+    {
+      "id": "en_05",
+      "language": "en",
+      "text": "approach the {object_en}"
+    },
+    {
+      "id": "en_06",
+      "language": "en",
+      "text": "take me near the {object_en}"
+    },
+    {
+      "id": "en_07",
+      "language": "en",
+      "text": "find the {object_en} and stop beside it"
+    },
+    {
+      "id": "en_08",
+      "language": "en",
+      "text": "head toward the {object_en}"
+    },
+    {
+      "id": "en_09",
+      "language": "en",
+      "text": "go where the {object_en} is"
+    },
+    {
+      "id": "en_10",
+      "language": "en",
+      "text": "stop in front of the {object_en}"
+    },
+    {
+      "id": "en_11",
+      "language": "en",
+      "text": "locate the {object_en} and move to it"
+    },
+    {
+      "id": "zh_val_00",
+      "language": "zh",
+      "text": "朝{object_zh}所在的地方走"
+    },
+    {
+      "id": "zh_val_01",
+      "language": "zh",
+      "text": "去{object_zh}跟前"
+    },
+    {
+      "id": "zh_val_02",
+      "language": "zh",
+      "text": "在房间里找到{object_zh}"
+    },
+    {
+      "id": "zh_val_03",
+      "language": "zh",
+      "text": "请前往{object_zh}的位置"
+    },
+    {
+      "id": "zh_val_04",
+      "language": "zh",
+      "text": "移动到{object_zh}旁"
+    },
+    {
+      "id": "zh_val_05",
+      "language": "zh",
+      "text": "向{object_zh}靠拢"
+    },
+    {
+      "id": "en_val_00",
+      "language": "en",
+      "text": "walk toward the location of the {object_en}"
+    },
+    {
+      "id": "en_val_01",
+      "language": "en",
+      "text": "go over beside the {object_en}"
+    },
+    {
+      "id": "en_val_02",
+      "language": "en",
+      "text": "find the {object_en} in the room"
+    },
+    {
+      "id": "en_val_03",
+      "language": "en",
+      "text": "please travel to the {object_en}"
+    },
+    {
+      "id": "en_val_04",
+      "language": "en",
+      "text": "move next to the {object_en}"
+    },
+    {
+      "id": "en_val_05",
+      "language": "en",
+      "text": "make your way toward the {object_en}"
+    },
+    {
+      "id": "zh_test_00",
+      "language": "zh",
+      "text": "带我去看{object_zh}"
+    },
+    {
+      "id": "zh_test_01",
+      "language": "zh",
+      "text": "开到{object_zh}那边"
+    },
+    {
+      "id": "zh_test_02",
+      "language": "zh",
+      "text": "去找到房间中的{object_zh}"
+    },
+    {
+      "id": "zh_test_03",
+      "language": "zh",
+      "text": "请去{object_zh}所在处"
+    },
+    {
+      "id": "zh_test_04",
+      "language": "zh",
+      "text": "到{object_zh}附近待命"
+    },
+    {
+      "id": "zh_test_05",
+      "language": "zh",
+      "text": "把{object_zh}作为目的地前进"
+    },
+    {
+      "id": "en_test_00",
+      "language": "en",
+      "text": "take me to see the {object_en}"
+    },
+    {
+      "id": "en_test_01",
+      "language": "en",
+      "text": "drive over to the {object_en}"
+    },
+    {
+      "id": "en_test_02",
+      "language": "en",
+      "text": "seek out the {object_en} in this room"
+    },
+    {
+      "id": "en_test_03",
+      "language": "en",
+      "text": "please go to where the {object_en} is located"
+    },
+    {
+      "id": "en_test_04",
+      "language": "en",
+      "text": "wait near the {object_en}"
+    },
+    {
+      "id": "en_test_05",
+      "language": "en",
+      "text": "use the {object_en} as your destination"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "indoor_hidden_train_00",
+      "split": "hidden_train",
+      "layout_index": 0,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.48,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.05,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.12,
+            0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            2.84,
+            -0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 9.462322208025617
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 21.46232220802562
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_01",
+      "split": "hidden_train",
+      "layout_index": 1,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.42,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            0.95,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.32,
+            -0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.04,
+            0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -11.243541102213197
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -23.243541102213197
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_02",
+      "split": "hidden_train",
+      "layout_index": 2,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "short_partition",
+          "position": [
+            -0.65,
+            -2.55,
+            0.9
+          ],
+          "size": [
+            2.1,
+            0.14,
+            1.8
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.56,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.15,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            -0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.44,
+            0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.16,
+            -0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 13.091893064346847
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 25.09189306434685
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_03",
+      "split": "hidden_train",
+      "layout_index": 3,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.5,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.2,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_combo_bar",
+          "position": [
+            1.92,
+            -0.34,
+            0.68
+          ],
+          "size": [
+            0.1,
+            0.26,
+            0.68
+          ],
+          "color": [
+            0.3,
+            0.26,
+            0.22
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.62,
+            -0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.34,
+            0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -8.174414626460273
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -20.174414626460273
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_04",
+      "split": "hidden_train",
+      "layout_index": 4,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.48,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.05,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.12,
+            0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            2.84,
+            -0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 11.944177188446334
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 23.944177188446332
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_05",
+      "split": "hidden_train",
+      "layout_index": 5,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.42,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            0.95,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.32,
+            -0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.04,
+            0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -13.547938988000496
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -25.547938988000496
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_06",
+      "split": "hidden_train",
+      "layout_index": 6,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "short_partition",
+          "position": [
+            -0.65,
+            -2.55,
+            0.9
+          ],
+          "size": [
+            2.1,
+            0.14,
+            1.8
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.56,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.15,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            -0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.44,
+            0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.16,
+            -0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 8.595911436920973
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 20.59591143692097
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_train_07",
+      "split": "hidden_train",
+      "layout_index": 7,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.5,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.2,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_combo_bar",
+          "position": [
+            1.92,
+            -0.34,
+            0.68
+          ],
+          "size": [
+            0.1,
+            0.26,
+            0.68
+          ],
+          "color": [
+            0.3,
+            0.26,
+            0.22
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.62,
+            -0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.34,
+            0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -10.332700515921784
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -22.332700515921786
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_validation_00",
+      "split": "hidden_validation",
+      "layout_index": 8,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.48,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.05,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.12,
+            0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            2.84,
+            -0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 14.381394591090604
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 26.381394591090604
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_validation_01",
+      "split": "hidden_validation",
+      "layout_index": 9,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.425,
+            1.25
+          ],
+          "size": [
+            9.0,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.5,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.85,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.42,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            0.95,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.32,
+            -0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.04,
+            0.52,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -8.901716032891997
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -20.901716032891997
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_test_00",
+      "split": "hidden_test",
+      "layout_index": 10,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.6,
+            1.25
+          ],
+          "size": [
+            9.3,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.65,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            7.2,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            -2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "short_partition",
+          "position": [
+            -0.65,
+            -2.55,
+            0.9
+          ],
+          "size": [
+            2.1,
+            0.14,
+            1.8
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.56,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.15,
+            1.1
+          ],
+          "color": [
+            0.35,
+            0.29,
+            0.27
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            -0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.44,
+            0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.16,
+            -0.62,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": 10.860814621637324
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            -0.35,
+            0.54
+          ],
+          "yaw_deg": 22.860814621637324
+        }
+      ]
+    },
+    {
+      "id": "indoor_hidden_test_01",
+      "split": "hidden_test",
+      "layout_index": 11,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "geometry": [
+        {
+          "id": "wall_north",
+          "position": [
+            0.0,
+            3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_south",
+          "position": [
+            0.0,
+            -3.25,
+            1.25
+          ],
+          "size": [
+            9.6,
+            0.16,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_east",
+          "position": [
+            4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "wall_west",
+          "position": [
+            -4.8,
+            0.0,
+            1.25
+          ],
+          "size": [
+            0.16,
+            6.5,
+            2.5
+          ],
+          "color": [
+            0.7,
+            0.72,
+            0.74
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "table_top",
+          "position": [
+            1.0,
+            -2.25,
+            0.66
+          ],
+          "size": [
+            1.25,
+            0.72,
+            0.12
+          ],
+          "color": [
+            0.32,
+            0.18,
+            0.08
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "cabinet",
+          "position": [
+            -2.75,
+            2.35,
+            0.65
+          ],
+          "size": [
+            1.15,
+            0.5,
+            1.3
+          ],
+          "color": [
+            0.22,
+            0.25,
+            0.28
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "sofa",
+          "position": [
+            -1.35,
+            -2.35,
+            0.42
+          ],
+          "size": [
+            1.7,
+            0.7,
+            0.84
+          ],
+          "color": [
+            0.12,
+            0.34,
+            0.48
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "low_shelf",
+          "position": [
+            2.8,
+            2.25,
+            0.48
+          ],
+          "size": [
+            1.15,
+            0.48,
+            0.96
+          ],
+          "color": [
+            0.36,
+            0.29,
+            0.18
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_screen",
+          "position": [
+            1.5,
+            0.0,
+            1.1
+          ],
+          "size": [
+            0.1,
+            1.2,
+            1.1
+          ],
+          "color": [
+            0.28,
+            0.31,
+            0.36
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_upper_panel",
+          "position": [
+            2.08,
+            -0.92,
+            0.78
+          ],
+          "size": [
+            0.08,
+            0.38,
+            0.78
+          ],
+          "color": [
+            0.26,
+            0.24,
+            0.2
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_lower_panel",
+          "position": [
+            2.28,
+            0.84,
+            0.58
+          ],
+          "size": [
+            0.08,
+            0.32,
+            0.58
+          ],
+          "color": [
+            0.24,
+            0.27,
+            0.32
+          ],
+          "collision": true,
+          "lidar_visible": true
+        },
+        {
+          "id": "search_combo_bar",
+          "position": [
+            1.92,
+            -0.34,
+            0.68
+          ],
+          "size": [
+            0.1,
+            0.26,
+            0.68
+          ],
+          "color": [
+            0.3,
+            0.26,
+            0.22
+          ],
+          "collision": true,
+          "lidar_visible": true
+        }
+      ],
+      "target_slots": [
+        {
+          "id": "hidden_a",
+          "position": [
+            3.62,
+            -0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        },
+        {
+          "id": "hidden_b",
+          "position": [
+            3.34,
+            0.72,
+            0.0
+          ],
+          "visible_at_start": false
+        }
+      ],
+      "start_slots": [
+        {
+          "id": "start_a",
+          "position": [
+            0.0,
+            0.0,
+            0.54
+          ],
+          "yaw_deg": -12.461755920553795
+        },
+        {
+          "id": "start_b",
+          "position": [
+            -0.35,
+            0.35,
+            0.54
+          ],
+          "yaw_deg": -24.461755920553795
+        }
+      ]
+    }
+  ],
+  "episodes": [
+    {
+      "id": "hidden_train_0000",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260723
+    },
+    {
+      "id": "hidden_train_0001",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260724
+    },
+    {
+      "id": "hidden_train_0002",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260725
+    },
+    {
+      "id": "hidden_train_0003",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260726
+    },
+    {
+      "id": "hidden_train_0004",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260727
+    },
+    {
+      "id": "hidden_train_0005",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260728
+    },
+    {
+      "id": "hidden_train_0006",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260729
+    },
+    {
+      "id": "hidden_train_0007",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260730
+    },
+    {
+      "id": "hidden_train_0008",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260731
+    },
+    {
+      "id": "hidden_train_0009",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260732
+    },
+    {
+      "id": "hidden_train_0010",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260733
+    },
+    {
+      "id": "hidden_train_0011",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260734
+    },
+    {
+      "id": "hidden_train_0012",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "cracker_box",
+      "instruction_template_id": "en_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260735
+    },
+    {
+      "id": "hidden_train_0013",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "cracker_box",
+      "instruction_template_id": "en_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260736
+    },
+    {
+      "id": "hidden_train_0014",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "cracker_box",
+      "instruction_template_id": "en_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260737
+    },
+    {
+      "id": "hidden_train_0015",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "cracker_box",
+      "instruction_template_id": "en_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260738
+    },
+    {
+      "id": "hidden_train_0016",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260739
+    },
+    {
+      "id": "hidden_train_0017",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260740
+    },
+    {
+      "id": "hidden_train_0018",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260741
+    },
+    {
+      "id": "hidden_train_0019",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260742
+    },
+    {
+      "id": "hidden_train_0020",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260743
+    },
+    {
+      "id": "hidden_train_0021",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260744
+    },
+    {
+      "id": "hidden_train_0022",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260745
+    },
+    {
+      "id": "hidden_train_0023",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "sugar_box",
+      "instruction_template_id": "en_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260746
+    },
+    {
+      "id": "hidden_train_0024",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260747
+    },
+    {
+      "id": "hidden_train_0025",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260748
+    },
+    {
+      "id": "hidden_train_0026",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260749
+    },
+    {
+      "id": "hidden_train_0027",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260750
+    },
+    {
+      "id": "hidden_train_0028",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260751
+    },
+    {
+      "id": "hidden_train_0029",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260752
+    },
+    {
+      "id": "hidden_train_0030",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260753
+    },
+    {
+      "id": "hidden_train_0031",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "zh_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260754
+    },
+    {
+      "id": "hidden_train_0032",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "zh_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260755
+    },
+    {
+      "id": "hidden_train_0033",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "zh_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260756
+    },
+    {
+      "id": "hidden_train_0034",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "zh_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260757
+    },
+    {
+      "id": "hidden_train_0035",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "zh_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260758
+    },
+    {
+      "id": "hidden_train_0036",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260759
+    },
+    {
+      "id": "hidden_train_0037",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260760
+    },
+    {
+      "id": "hidden_train_0038",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260761
+    },
+    {
+      "id": "hidden_train_0039",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260762
+    },
+    {
+      "id": "hidden_train_0040",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260763
+    },
+    {
+      "id": "hidden_train_0041",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260764
+    },
+    {
+      "id": "hidden_train_0042",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260765
+    },
+    {
+      "id": "hidden_train_0043",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260766
+    },
+    {
+      "id": "hidden_train_0044",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260767
+    },
+    {
+      "id": "hidden_train_0045",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260768
+    },
+    {
+      "id": "hidden_train_0046",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260769
+    },
+    {
+      "id": "hidden_train_0047",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260770
+    },
+    {
+      "id": "hidden_train_0048",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260771
+    },
+    {
+      "id": "hidden_train_0049",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260772
+    },
+    {
+      "id": "hidden_train_0050",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260773
+    },
+    {
+      "id": "hidden_train_0051",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260774
+    },
+    {
+      "id": "hidden_train_0052",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260775
+    },
+    {
+      "id": "hidden_train_0053",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260776
+    },
+    {
+      "id": "hidden_train_0054",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260777
+    },
+    {
+      "id": "hidden_train_0055",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260778
+    },
+    {
+      "id": "hidden_train_0056",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260779
+    },
+    {
+      "id": "hidden_train_0057",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260780
+    },
+    {
+      "id": "hidden_train_0058",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260781
+    },
+    {
+      "id": "hidden_train_0059",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260782
+    },
+    {
+      "id": "hidden_train_0060",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "en_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260783
+    },
+    {
+      "id": "hidden_train_0061",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "en_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260784
+    },
+    {
+      "id": "hidden_train_0062",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "en_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260785
+    },
+    {
+      "id": "hidden_train_0063",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "en_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260786
+    },
+    {
+      "id": "hidden_train_0064",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260787
+    },
+    {
+      "id": "hidden_train_0065",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260788
+    },
+    {
+      "id": "hidden_train_0066",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260789
+    },
+    {
+      "id": "hidden_train_0067",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260790
+    },
+    {
+      "id": "hidden_train_0068",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260791
+    },
+    {
+      "id": "hidden_train_0069",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260792
+    },
+    {
+      "id": "hidden_train_0070",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260793
+    },
+    {
+      "id": "hidden_train_0071",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "en_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260794
+    },
+    {
+      "id": "hidden_train_0072",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "banana",
+      "instruction_template_id": "zh_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260795
+    },
+    {
+      "id": "hidden_train_0073",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "banana",
+      "instruction_template_id": "zh_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260796
+    },
+    {
+      "id": "hidden_train_0074",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "banana",
+      "instruction_template_id": "zh_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260797
+    },
+    {
+      "id": "hidden_train_0075",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "banana",
+      "instruction_template_id": "zh_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260798
+    },
+    {
+      "id": "hidden_train_0076",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "banana",
+      "instruction_template_id": "zh_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260799
+    },
+    {
+      "id": "hidden_train_0077",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "banana",
+      "instruction_template_id": "zh_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260800
+    },
+    {
+      "id": "hidden_train_0078",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "banana",
+      "instruction_template_id": "zh_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260801
+    },
+    {
+      "id": "hidden_train_0079",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "banana",
+      "instruction_template_id": "zh_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260802
+    },
+    {
+      "id": "hidden_train_0080",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "pitcher",
+      "instruction_template_id": "zh_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260803
+    },
+    {
+      "id": "hidden_train_0081",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "pitcher",
+      "instruction_template_id": "zh_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260804
+    },
+    {
+      "id": "hidden_train_0082",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "pitcher",
+      "instruction_template_id": "zh_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260805
+    },
+    {
+      "id": "hidden_train_0083",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "pitcher",
+      "instruction_template_id": "zh_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260806
+    },
+    {
+      "id": "hidden_train_0084",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260807
+    },
+    {
+      "id": "hidden_train_0085",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260808
+    },
+    {
+      "id": "hidden_train_0086",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260809
+    },
+    {
+      "id": "hidden_train_0087",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260810
+    },
+    {
+      "id": "hidden_train_0088",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_00",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260811
+    },
+    {
+      "id": "hidden_train_0089",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_01",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260812
+    },
+    {
+      "id": "hidden_train_0090",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_02",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_06",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260813
+    },
+    {
+      "id": "hidden_train_0091",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_03",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_07",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260814
+    },
+    {
+      "id": "hidden_train_0092",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_04",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_08",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20260815
+    },
+    {
+      "id": "hidden_train_0093",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_05",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_09",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20260816
+    },
+    {
+      "id": "hidden_train_0094",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_06",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_10",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20260817
+    },
+    {
+      "id": "hidden_train_0095",
+      "split": "hidden_train",
+      "scene_id": "indoor_hidden_train_07",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_11",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20260818
+    },
+    {
+      "id": "hidden_validation_0000",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_val_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340723
+    },
+    {
+      "id": "hidden_validation_0001",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_val_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340724
+    },
+    {
+      "id": "hidden_validation_0002",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_val_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340725
+    },
+    {
+      "id": "hidden_validation_0003",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_val_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340726
+    },
+    {
+      "id": "hidden_validation_0004",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_val_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340727
+    },
+    {
+      "id": "hidden_validation_0005",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_val_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340728
+    },
+    {
+      "id": "hidden_validation_0006",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_val_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340729
+    },
+    {
+      "id": "hidden_validation_0007",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_val_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340730
+    },
+    {
+      "id": "hidden_validation_0008",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_val_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340731
+    },
+    {
+      "id": "hidden_validation_0009",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_val_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340732
+    },
+    {
+      "id": "hidden_validation_0010",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_val_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340733
+    },
+    {
+      "id": "hidden_validation_0011",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_val_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340734
+    },
+    {
+      "id": "hidden_validation_0012",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_val_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340735
+    },
+    {
+      "id": "hidden_validation_0013",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_val_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340736
+    },
+    {
+      "id": "hidden_validation_0014",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_val_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340737
+    },
+    {
+      "id": "hidden_validation_0015",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_val_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340738
+    },
+    {
+      "id": "hidden_validation_0016",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "zh_val_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340739
+    },
+    {
+      "id": "hidden_validation_0017",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "zh_val_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340740
+    },
+    {
+      "id": "hidden_validation_0018",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "banana",
+      "instruction_template_id": "en_val_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340741
+    },
+    {
+      "id": "hidden_validation_0019",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "banana",
+      "instruction_template_id": "en_val_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340742
+    },
+    {
+      "id": "hidden_validation_0020",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_val_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340743
+    },
+    {
+      "id": "hidden_validation_0021",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_val_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340744
+    },
+    {
+      "id": "hidden_validation_0022",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_00",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_val_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 0,
+      "search_family_name": "screen_only",
+      "seed": 20340745
+    },
+    {
+      "id": "hidden_validation_0023",
+      "split": "hidden_validation",
+      "scene_id": "indoor_hidden_validation_01",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_val_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 1,
+      "search_family_name": "screen_with_upper_panel",
+      "seed": 20340746
+    },
+    {
+      "id": "hidden_test_0000",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360723
+    },
+    {
+      "id": "hidden_test_0001",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360724
+    },
+    {
+      "id": "hidden_test_0002",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360725
+    },
+    {
+      "id": "hidden_test_0003",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360726
+    },
+    {
+      "id": "hidden_test_0004",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360727
+    },
+    {
+      "id": "hidden_test_0005",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360728
+    },
+    {
+      "id": "hidden_test_0006",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360729
+    },
+    {
+      "id": "hidden_test_0007",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360730
+    },
+    {
+      "id": "hidden_test_0008",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360731
+    },
+    {
+      "id": "hidden_test_0009",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360732
+    },
+    {
+      "id": "hidden_test_0010",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360733
+    },
+    {
+      "id": "hidden_test_0011",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360734
+    },
+    {
+      "id": "hidden_test_0012",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360735
+    },
+    {
+      "id": "hidden_test_0013",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "pudding_box",
+      "instruction_template_id": "zh_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360736
+    },
+    {
+      "id": "hidden_test_0014",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360737
+    },
+    {
+      "id": "hidden_test_0015",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "gelatin_box",
+      "instruction_template_id": "zh_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360738
+    },
+    {
+      "id": "hidden_test_0016",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "zh_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360739
+    },
+    {
+      "id": "hidden_test_0017",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "potted_meat_can",
+      "instruction_template_id": "zh_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360740
+    },
+    {
+      "id": "hidden_test_0018",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "banana",
+      "instruction_template_id": "en_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360741
+    },
+    {
+      "id": "hidden_test_0019",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "banana",
+      "instruction_template_id": "en_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360742
+    },
+    {
+      "id": "hidden_test_0020",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360743
+    },
+    {
+      "id": "hidden_test_0021",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "pitcher",
+      "instruction_template_id": "en_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360744
+    },
+    {
+      "id": "hidden_test_0022",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360745
+    },
+    {
+      "id": "hidden_test_0023",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "bleach_cleanser",
+      "instruction_template_id": "en_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360746
+    },
+    {
+      "id": "hidden_test_0024",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360747
+    },
+    {
+      "id": "hidden_test_0025",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "master_chef_can",
+      "instruction_template_id": "zh_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360748
+    },
+    {
+      "id": "hidden_test_0026",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360749
+    },
+    {
+      "id": "hidden_test_0027",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "cracker_box",
+      "instruction_template_id": "zh_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360750
+    },
+    {
+      "id": "hidden_test_0028",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360751
+    },
+    {
+      "id": "hidden_test_0029",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "sugar_box",
+      "instruction_template_id": "zh_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360752
+    },
+    {
+      "id": "hidden_test_0030",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_test_00",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360753
+    },
+    {
+      "id": "hidden_test_0031",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "tomato_soup_can",
+      "instruction_template_id": "en_test_01",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360754
+    },
+    {
+      "id": "hidden_test_0032",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_test_02",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360755
+    },
+    {
+      "id": "hidden_test_0033",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "mustard_bottle",
+      "instruction_template_id": "en_test_03",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_b",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360756
+    },
+    {
+      "id": "hidden_test_0034",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_00",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_test_04",
+      "target_slot_id": "hidden_a",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 2,
+      "search_family_name": "screen_with_lower_panel",
+      "seed": 20360757
+    },
+    {
+      "id": "hidden_test_0035",
+      "split": "hidden_test",
+      "scene_id": "indoor_hidden_test_01",
+      "object_category": "tuna_fish_can",
+      "instruction_template_id": "en_test_05",
+      "target_slot_id": "hidden_b",
+      "start_slot_id": "start_a",
+      "search_required": true,
+      "target_visible_at_start": false,
+      "search_family_id": 3,
+      "search_family_name": "screen_combo",
+      "seed": 20360758
+    }
+  ]
+}

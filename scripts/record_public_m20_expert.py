@@ -1097,11 +1097,17 @@ def main() -> None:
     physics_dt = sim.get_physics_dt()
     scenario_metadata = None
     if INDOOR_SELECTION is not None:
+        task_type = (
+            "hidden_object_search"
+            if str(INDOOR_SELECTION["episode"]["split"]).startswith("hidden_")
+            or bool(INDOOR_SELECTION["episode"].get("search_required", False))
+            else "visible_object_navigation"
+        )
         scenario_metadata = {
             "manifest": str(args.indoor_manifest.resolve()),
             "manifest_sha256": INDOOR_SELECTION["manifest_sha256"],
             "scenario_episode_id": INDOOR_SELECTION["episode"]["id"],
-            "task_type": "visible_object_navigation",
+            "task_type": task_type,
             "scene_id": INDOOR_SELECTION["scene"]["id"],
             "split": INDOOR_SELECTION["episode"]["split"],
             "object_category": INDOOR_SELECTION["object"]["id"],
@@ -1116,11 +1122,15 @@ def main() -> None:
             "target_slot_id": INDOOR_SELECTION["target_slot"]["id"],
             "start_slot_id": INDOOR_SELECTION["start_slot"]["id"],
             "target_expected_visible_at_start": bool(
-                INDOOR_SELECTION["target_slot"]["visible_at_start"]
+                INDOOR_SELECTION["target_visible_at_start"]
             ),
+            "search_required": bool(INDOOR_SELECTION["search_required"]),
             "expert_uses_privileged_target_pose": True,
             "inference_uses_privileged_target_pose": False,
         }
+        if INDOOR_SELECTION.get("search_family_id") is not None:
+            scenario_metadata["search_family_id"] = INDOOR_SELECTION["search_family_id"]
+            scenario_metadata["search_family_name"] = INDOOR_SELECTION["search_family_name"]
     metadata = {
         "format": "m20pro_native_expert_hdf5_v1", "expert": "AI-DA-STC/M20-autonomy-sim policy.onnx",
         "policy_protocol": "57 observation -> 16 action; official M20PolicyRunner; no PPO reward",

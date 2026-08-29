@@ -10,7 +10,15 @@ import math
 from pathlib import Path
 
 
-SCHEMA = "m20pro_visible_objectnav_scenarios_v1"
+VISIBLE_SCHEMA = "m20pro_visible_objectnav_scenarios_v1"
+HIDDEN_SCHEMA = "m20pro_hidden_objectnav_scenarios_v1"
+HIDDEN_SEARCH_FAMILY_COUNT = 4
+HIDDEN_SEARCH_FAMILY_NAMES = (
+    "screen_only",
+    "screen_with_upper_panel",
+    "screen_with_lower_panel",
+    "screen_combo",
+)
 
 OBJECT_CATALOG = (
     ("master_chef_can", "主厨罐头", "master chef can", "Props/YCB/Axis_Aligned/002_master_chef_can.usd", 4.0),
@@ -117,7 +125,63 @@ def _room_geometry(layout_index: int) -> list[dict]:
     return geometry
 
 
-def build_manifest(seed: int = 20260723) -> dict:
+def _hidden_room_geometry(layout_index: int) -> list[dict]:
+    geometry = _room_geometry(layout_index)
+    family_id = layout_index % HIDDEN_SEARCH_FAMILY_COUNT
+    side = -1.0 if layout_index % 2 else 1.0
+    screen_color = (0.35, 0.29, 0.27) if side > 0.0 else (0.28, 0.31, 0.36)
+    screen_half_y = (1.05, 0.95, 1.15, 1.20)[family_id]
+    screen_x = (1.48, 1.42, 1.56, 1.50)[family_id]
+    geometry.append(
+        _box(
+            "search_screen",
+            (screen_x, 0.0, 1.10),
+            (0.10, screen_half_y, 1.10),
+            screen_color,
+        )
+    )
+    if family_id in {1, 3}:
+        geometry.append(
+            _box(
+                "search_upper_panel",
+                (2.08, 0.92 * side, 0.78),
+                (0.08, 0.38, 0.78),
+                (0.26, 0.24, 0.20),
+            )
+        )
+    if family_id in {2, 3}:
+        geometry.append(
+            _box(
+                "search_lower_panel",
+                (2.28, -0.84 * side, 0.58),
+                (0.08, 0.32, 0.58),
+                (0.24, 0.27, 0.32),
+            )
+        )
+    if family_id == 3:
+        geometry.append(
+            _box(
+                "search_combo_bar",
+                (1.92, 0.34 * side, 0.68),
+                (0.10, 0.26, 0.68),
+                (0.30, 0.26, 0.22),
+            )
+        )
+    return geometry
+
+
+def _hidden_target_slots(layout_index: int) -> list[dict]:
+    side = -1.0 if layout_index % 2 else 1.0
+    family_id = layout_index % HIDDEN_SEARCH_FAMILY_COUNT
+    target_x = (3.12, 3.28, 3.44, 3.58)[family_id] + 0.04 * (layout_index % 2)
+    target_y = side * (0.52 + 0.10 * (layout_index % 3))
+    return [
+        {"id": "hidden_a", "position": [target_x, target_y, 0.0], "visible_at_start": False},
+        {"id": "hidden_b", "position": [target_x - 0.28, -target_y, 0.0], "visible_at_start": False},
+    ]
+
+
+def build_manifest(seed: int = 20260723, *, include_hidden_search: bool = False) -> dict:
     objects = [
         {
             "id": object_id,
@@ -134,79 +198,143 @@ def build_manifest(seed: int = 20260723) -> dict:
         {"id": template_id, "language": language, "text": value}
         for template_id, language, value in INSTRUCTION_TEMPLATES
     ]
-    scenes = []
-    for index in range(12):
-        if index < 8:
-            split = "train"
-            split_index = index
-        elif index < 10:
-            split = "validation"
-            split_index = index - 8
-        else:
-            split = "test_visible"
-            split_index = index - 10
-        side = -1.0 if index % 2 else 1.0
-        target_y = side * (0.45 + 0.18 * (index % 3))
-        target_x = 3.0 + 0.18 * (index % 4)
-        target_heading = math.degrees(math.atan2(target_y, target_x))
-        scenes.append(
-            {
-                "id": f"indoor_{split}_{split_index:02d}",
-                "split": split,
-                "layout_index": index,
-                "geometry": _room_geometry(index),
-                "target_slots": [
-                    {"id": "visible_a", "position": [target_x, target_y, 0.0], "visible_at_start": True},
-                    {"id": "visible_b", "position": [target_x - 0.25, -target_y, 0.0], "visible_at_start": True},
-                ],
-                "start_slots": [
-                    {"id": "start_a", "position": [0.0, 0.0, 0.54], "yaw_deg": target_heading},
-                    {"id": "start_b", "position": [-0.35, -side * 0.35, 0.54], "yaw_deg": target_heading + side * 12.0},
-                ],
-            }
-        )
-
-    episodes = []
-    split_scene_counts = {"train": 8, "validation": 2, "test_visible": 2}
-    split_offsets = {"train": 0, "validation": 8, "test_visible": 10}
-    split_episode_counts = {"train": 96, "validation": 24, "test_visible": 36}
-    template_ranges = {
-        "train": (0, 24),
-        "validation": (24, 36),
-        "test_visible": (36, 48),
-    }
-    for split, count in split_episode_counts.items():
-        template_start, template_end = template_ranges[split]
-        for index in range(count):
-            scene_index = split_offsets[split] + index % split_scene_counts[split]
-            object_index = (index // split_scene_counts[split]) % len(objects)
-            template_index = template_start + index % (template_end - template_start)
-            episodes.append(
+    if include_hidden_search:
+        scenes = []
+        for index in range(12):
+            if index < 8:
+                split = "hidden_train"
+                split_index = index
+            elif index < 10:
+                split = "hidden_validation"
+                split_index = index - 8
+            else:
+                split = "hidden_test"
+                split_index = index - 10
+            side = -1.0 if index % 2 else 1.0
+            family_id = index % HIDDEN_SEARCH_FAMILY_COUNT
+            target_y = side * (0.52 + 0.14 * (index % 3))
+            target_x = (3.12, 3.28, 3.44, 3.58)[family_id] + 0.04 * (index % 2)
+            target_heading = math.degrees(math.atan2(target_y, target_x))
+            scenes.append(
                 {
-                    "id": f"{split}_{index:04d}",
+                    "id": f"indoor_{split}_{split_index:02d}",
                     "split": split,
-                    "scene_id": scenes[scene_index]["id"],
-                    "object_category": objects[object_index]["id"],
-                    "instruction_template_id": templates[template_index]["id"],
-                    # Training starts face visible_a. Keeping the target slot
-                    # aligned with that heading makes the camera visibility
-                    # claim physically testable instead of manifest-only.
-                    "target_slot_id": (
-                        "visible_a"
-                        if split == "train"
-                        else ("visible_a" if index % 2 == 0 else "visible_b")
-                    ),
-                    "start_slot_id": (
-                        "start_a"
-                        if split == "train"
-                        else ("start_a" if index % 3 else "start_b")
-                    ),
-                    "seed": seed + index + 10000 * split_offsets[split],
+                    "layout_index": index,
+                    "search_family_id": family_id,
+                    "search_family_name": HIDDEN_SEARCH_FAMILY_NAMES[family_id],
+                    "geometry": _hidden_room_geometry(index),
+                    "target_slots": _hidden_target_slots(index),
+                    "start_slots": [
+                        {"id": "start_a", "position": [0.0, 0.0, 0.54], "yaw_deg": target_heading},
+                        {"id": "start_b", "position": [-0.35, -side * 0.35, 0.54], "yaw_deg": target_heading + side * 12.0},
+                    ],
+                }
+            )
+        episodes = []
+        split_scene_counts = {"hidden_train": 8, "hidden_validation": 2, "hidden_test": 2}
+        split_offsets = {"hidden_train": 0, "hidden_validation": 8, "hidden_test": 10}
+        split_episode_counts = {"hidden_train": 96, "hidden_validation": 24, "hidden_test": 36}
+        template_ranges = {
+            "hidden_train": (0, 24),
+            "hidden_validation": (24, 36),
+            "hidden_test": (36, 48),
+        }
+        for split, count in split_episode_counts.items():
+            template_start, template_end = template_ranges[split]
+            for index in range(count):
+                scene_index = split_offsets[split] + index % split_scene_counts[split]
+                object_index = (index // split_scene_counts[split]) % len(objects)
+                template_index = template_start + index % (template_end - template_start)
+                episodes.append(
+                    {
+                        "id": f"{split}_{index:04d}",
+                        "split": split,
+                        "scene_id": scenes[scene_index]["id"],
+                        "object_category": objects[object_index]["id"],
+                        "instruction_template_id": templates[template_index]["id"],
+                        "target_slot_id": "hidden_a" if index % 2 == 0 else "hidden_b",
+                        "start_slot_id": "start_a" if index % 3 else "start_b",
+                        "search_required": True,
+                        "target_visible_at_start": False,
+                        "search_family_id": scenes[scene_index]["search_family_id"],
+                        "search_family_name": scenes[scene_index]["search_family_name"],
+                        "seed": seed + index + 10000 * split_offsets[split],
+                    }
+                )
+    else:
+        scenes = []
+        for index in range(12):
+            if index < 8:
+                split = "train"
+                split_index = index
+            elif index < 10:
+                split = "validation"
+                split_index = index - 8
+            else:
+                split = "test_visible"
+                split_index = index - 10
+            side = -1.0 if index % 2 else 1.0
+            target_y = side * (0.45 + 0.18 * (index % 3))
+            target_x = 3.0 + 0.18 * (index % 4)
+            target_heading = math.degrees(math.atan2(target_y, target_x))
+            scenes.append(
+                {
+                    "id": f"indoor_{split}_{split_index:02d}",
+                    "split": split,
+                    "layout_index": index,
+                    "geometry": _room_geometry(index),
+                    "target_slots": [
+                        {"id": "visible_a", "position": [target_x, target_y, 0.0], "visible_at_start": True},
+                        {"id": "visible_b", "position": [target_x - 0.25, -target_y, 0.0], "visible_at_start": True},
+                    ],
+                    "start_slots": [
+                        {"id": "start_a", "position": [0.0, 0.0, 0.54], "yaw_deg": target_heading},
+                        {"id": "start_b", "position": [-0.35, -side * 0.35, 0.54], "yaw_deg": target_heading + side * 12.0},
+                    ],
                 }
             )
 
+        episodes = []
+        split_scene_counts = {"train": 8, "validation": 2, "test_visible": 2}
+        split_offsets = {"train": 0, "validation": 8, "test_visible": 10}
+        split_episode_counts = {"train": 96, "validation": 24, "test_visible": 36}
+        template_ranges = {
+            "train": (0, 24),
+            "validation": (24, 36),
+            "test_visible": (36, 48),
+        }
+        for split, count in split_episode_counts.items():
+            template_start, template_end = template_ranges[split]
+            for index in range(count):
+                scene_index = split_offsets[split] + index % split_scene_counts[split]
+                object_index = (index // split_scene_counts[split]) % len(objects)
+                template_index = template_start + index % (template_end - template_start)
+                episodes.append(
+                    {
+                        "id": f"{split}_{index:04d}",
+                        "split": split,
+                        "scene_id": scenes[scene_index]["id"],
+                        "object_category": objects[object_index]["id"],
+                        "instruction_template_id": templates[template_index]["id"],
+                        # Training starts face visible_a. Keeping the target slot
+                        # aligned with that heading makes the camera visibility
+                        # claim physically testable instead of manifest-only.
+                        "target_slot_id": (
+                            "visible_a"
+                            if split == "train"
+                            else ("visible_a" if index % 2 == 0 else "visible_b")
+                        ),
+                        "start_slot_id": (
+                            "start_a"
+                            if split == "train"
+                            else ("start_a" if index % 3 else "start_b")
+                        ),
+                        "seed": seed + index + 10000 * split_offsets[split],
+                    }
+                )
+
     return {
-        "schema": SCHEMA,
+        "schema": HIDDEN_SCHEMA if include_hidden_search else VISIBLE_SCHEMA,
         "seed": seed,
         "simulation_only": True,
         "asset_root": "{ISAAC_NUCLEUS_DIR}",
@@ -229,8 +357,9 @@ def load_manifest(path: Path) -> dict:
 
 
 def validate_manifest(manifest: dict) -> dict:
-    if manifest.get("schema") != SCHEMA:
-        raise ValueError(f"Unsupported scenario schema: {manifest.get('schema')!r}")
+    schema = manifest.get("schema")
+    if schema not in {VISIBLE_SCHEMA, HIDDEN_SCHEMA}:
+        raise ValueError(f"Unsupported scenario schema: {schema!r}")
     objects = manifest.get("object_catalog", [])
     templates = manifest.get("instruction_templates", [])
     scenes = manifest.get("scenes", [])
@@ -242,14 +371,37 @@ def validate_manifest(manifest: dict) -> dict:
         raise ValueError("Manifest must contain at least 12 unique object categories")
     if len(template_ids) != len(templates) or len(template_ids) < 24:
         raise ValueError("Manifest must contain at least 24 unique instruction templates")
-    train_scenes = {item["id"] for item in scenes if item.get("split") == "train"}
-    if len(scene_ids) != len(scenes) or len(train_scenes) < 8:
-        raise ValueError("Manifest must contain at least 8 unique training scenes")
+    if len(scene_ids) != len(scenes):
+        raise ValueError("Scene ids must be unique")
+    if schema == VISIBLE_SCHEMA:
+        train_scenes = {item["id"] for item in scenes if item.get("split") == "train"}
+        if len(train_scenes) < 8:
+            raise ValueError("Manifest must contain at least 8 unique training scenes")
+    else:
+        train_scenes = {item["id"] for item in scenes if item.get("split") == "hidden_train"}
+        if len(train_scenes) < 8:
+            raise ValueError("Hidden manifest must contain at least 8 unique hidden training scenes")
+        hidden_families = {
+            int(item.get("search_family_id"))
+            for item in scenes
+            if item.get("split", "").startswith("hidden_") and item.get("search_family_id") is not None
+        }
+        if len(hidden_families) < HIDDEN_SEARCH_FAMILY_COUNT:
+            raise ValueError(
+                f"Hidden manifest must cover at least {HIDDEN_SEARCH_FAMILY_COUNT} search families"
+            )
     for scene in scenes:
         if not scene.get("geometry") or not scene.get("target_slots") or not scene.get("start_slots"):
             raise ValueError(f"Scene is incomplete: {scene['id']}")
         if not all(item.get("collision") and item.get("lidar_visible") for item in scene["geometry"]):
             raise ValueError(f"Every geometry item must collide and enter LiDAR: {scene['id']}")
+        if schema == HIDDEN_SCHEMA:
+            if not any(item["id"] == "search_screen" for item in scene["geometry"]):
+                raise ValueError(f"Hidden scenes must include an occluding screen: {scene['id']}")
+            if not all(not item.get("visible_at_start", True) for item in scene["target_slots"]):
+                raise ValueError(f"Hidden scene targets must start occluded: {scene['id']}")
+            if scene.get("search_family_id") not in range(HIDDEN_SEARCH_FAMILY_COUNT):
+                raise ValueError(f"Hidden scene has invalid search family: {scene['id']}")
     episode_ids = set()
     for episode in episodes:
         if episode["id"] in episode_ids:
@@ -268,6 +420,15 @@ def validate_manifest(manifest: dict) -> dict:
         "all_scenes": len(scene_ids),
         "object_categories": len(object_ids),
         "instruction_templates": len(template_ids),
+        "hidden_search_families": len(
+            {
+                int(item.get("search_family_id"))
+                for item in scenes
+                if item.get("split", "").startswith("hidden_") and item.get("search_family_id") is not None
+            }
+        )
+        if schema == HIDDEN_SCHEMA
+        else 0,
         "episodes": len(episodes),
     }
 
@@ -292,5 +453,9 @@ def resolve_episode(manifest: dict, episode_id: str) -> dict:
         "target_slot": target_slot,
         "start_slot": start_slot,
         "task_text": task_text,
+        "search_required": bool(episode.get("search_required", False)),
+        "target_visible_at_start": bool(target_slot.get("visible_at_start", True)),
+        "search_family_id": scene.get("search_family_id"),
+        "search_family_name": scene.get("search_family_name"),
         "manifest_sha256": manifest_sha256(manifest),
     }

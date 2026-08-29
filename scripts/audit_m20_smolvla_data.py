@@ -173,7 +173,7 @@ def inspect_episode(path: Path, root: Path, args: argparse.Namespace) -> dict:
         train_eligible = (
             (success and command_ok or stable_search or dagger_rollout_stable)
             and not holdout
-            and (not smolvla_candidate or split == "train")
+            and (not smolvla_candidate or split in {"train", "hidden_train"})
         )
         explicit_timestamps = "timestamp" in h5 and "frame_index" in h5
         sensor_alignment = str(attrs.get("sensor_alignment", "undocumented"))
@@ -564,8 +564,29 @@ def main() -> None:
         if episode.get("smolvla_stop_migration_eligible", False)
     ]
     train_candidates = [
+        episode
+        for episode in candidates
+        if episode.get("split") in {"train", "hidden_train"}
+    ]
+    visible_train_candidates = [
         episode for episode in candidates if episode.get("split") == "train"
     ]
+    hidden_train_candidates = [
+        episode for episode in candidates if episode.get("split") == "hidden_train"
+    ]
+    hidden_candidates = [
+        episode
+        for episode in smolvla_eligible
+        if str(episode.get("task_type")) == "hidden_object_search"
+        or episode.get("split") == "hidden_train"
+    ]
+    hidden_search_family_ids = sorted(
+        {
+            int(episode.get("search_family_id"))
+            for episode in hidden_candidates
+            if episode.get("search_family_id") not in (None, "")
+        }
+    )
     successful = [episode for episode in episodes if episode.get("success", False)]
     holdouts = [episode for episode in episodes if episode.get("holdout", False)]
     tasks = Counter(episode.get("task", "") for episode in smolvla_eligible)
@@ -597,11 +618,11 @@ def main() -> None:
     ]
     hidden_search_successes = [
         episode
-        for episode in smolvla_eligible
+        for episode in hidden_candidates
         if episode.get("success")
         and episode.get("target_reached")
-        and episode.get("stable_search_partial_demo")
-        and episode.get("target_color") not in (None, "none", "")
+        and bool(episode.get("search_required", False))
+        and episode.get("target_visible_at_start") is False
     ]
     obstacle_lidar_episodes = [
         episode
@@ -620,8 +641,15 @@ def main() -> None:
         "minimum_object_categories_12": len(categories) >= 12,
         "minimum_instruction_templates_24": len(template_ids) >= 24,
         "all_candidates_valid_and_timestamp_aligned": (
-            len(train_candidates) > 0
-            and len(smolvla_eligible) == len(train_candidates)
+            len(visible_train_candidates) > 0
+            and len(
+                [
+                    episode
+                    for episode in smolvla_eligible
+                    if episode.get("split") == "train"
+                ]
+            )
+            == len(visible_train_candidates)
         ),
         "scene_geometry_visible_to_lidar": (
             len(smolvla_eligible) > 0
@@ -634,6 +662,36 @@ def main() -> None:
             len(smolvla_eligible) > 0
             and all(episode.get("high_level_action_valid") for episode in smolvla_eligible)
         ),
+    }
+    hidden_object_search_gates = {
+        "minimum_train_scenes_8": len(scene_ids) >= 8,
+        "minimum_object_categories_12": len(categories) >= 12,
+        "minimum_instruction_templates_24": len(template_ids) >= 24,
+        "minimum_hidden_search_families_4": len(hidden_search_family_ids) >= 4,
+        "all_hidden_candidates_valid_and_timestamp_aligned": (
+            len(hidden_train_candidates) > 0
+            and len(hidden_candidates) == len(hidden_train_candidates)
+        ),
+        "search_required_and_occluded_at_start": (
+            len(hidden_candidates) > 0
+            and all(
+                bool(episode.get("search_required", False))
+                and episode.get("target_visible_at_start") is False
+                for episode in hidden_candidates
+            )
+        ),
+        "scene_geometry_visible_to_lidar": (
+            len(hidden_candidates) > 0
+            and all(
+                episode.get("lidar_mesh_scope") != "ground_only"
+                for episode in hidden_candidates
+            )
+        ),
+        "six_dimensional_action_labels_present": (
+            len(hidden_candidates) > 0
+            and all(episode.get("high_level_action_valid") for episode in hidden_candidates)
+        ),
+        "hidden_search_success_present": len(hidden_search_successes) > 0,
     }
     downstream_gates = {
         "hidden_object_search_success_present": len(hidden_search_successes) > 0,
@@ -676,13 +734,18 @@ def main() -> None:
             "instruction_counts": dict(sorted(tasks.items())),
             "jump_episodes": len(jump_episodes),
             "hidden_search_successes": len(hidden_search_successes),
+            "hidden_search_family_ids": hidden_search_family_ids,
             "obstacle_lidar_episodes": len(obstacle_lidar_episodes),
             "timestamp_aligned_episodes": len(timestamp_aligned),
         },
         "gates": gates,
         "visible_objectnav_gates": visible_objectnav_gates,
+        "hidden_object_search_gates": hidden_object_search_gates,
         "downstream_gates": downstream_gates,
         "ready_for_visible_objectnav_finetune": all(visible_objectnav_gates.values()),
+        "ready_for_hidden_object_search_finetune": all(
+            hidden_object_search_gates.values()
+        ),
         "ready_for_smolvla_finetune": all(gates.values()),
         "blocking_reasons": [name for name, passed in gates.items() if not passed],
         "notes": [
@@ -705,8 +768,10 @@ def main() -> None:
             "inventory",
             "gates",
             "visible_objectnav_gates",
+            "hidden_object_search_gates",
             "downstream_gates",
             "ready_for_visible_objectnav_finetune",
+            "ready_for_hidden_object_search_finetune",
             "ready_for_smolvla_finetune",
             "blocking_reasons",
         )

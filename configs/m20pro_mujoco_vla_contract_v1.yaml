@@ -28,6 +28,19 @@ data:
   multi_object_per_scene: true
   counterfactual_instruction_swap_required: true
   holdout_layouts_disjoint: true
+  obstacle_layouts_randomized: true
+  initial_pose_templates_min: 4
+  initial_pose_records_xy: true
+  task_language_templates_min: 24
+  task_language_bilingual: true
+  task_text_encoding: utf8_byte_v1
+  occluded_search_layouts_required: true
+  occluded_search_layout_families: 4
+  occluded_search_min_obstacle_count: 3
+  occluded_search_min_clearance_m: 0.10
+  occluded_search_start_curriculum: balanced_anchor_and_varied
+  occluded_search_records_target_discovery_step: true
+  occluded_search_records_min_obstacle_clearance: true
   episode_artifacts:
     - h264_video
     - episode_json
@@ -37,4 +50,8 @@ acceptance:
   offline_loss_is_success: false
   target_visible_input_check_required: true
   random_layout_closed_loop_required: true
+  obstacle_avoidance_closed_loop_required: true
+  occluded_target_recovery_required: true
+  occluded_search_learner_gate_required: true
+  variable_start_pose_required: true
   sim2sim_requires_mujoco_gate: true

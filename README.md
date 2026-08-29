@@ -75,7 +75,7 @@ src/m20pro_navigation/m20pro_navigation/dynamic_obstacle_simulator.py
 - 本仓库不安装 systemd 自启动。
 - 本仓库不访问 103/104/106 的真机服务。
 - 仿真沿用 `/m20pro_tcp_bridge/...` 话题命名，是为了让网页和任务逻辑与真机接口形状一致。
-- `m20pro日志.md` 保留了历史开发记录，其中会提到 real 内容；新的真机开发请到 real 仓库继续。
+- 历史开发记录与思路已经统一并入 `../../notes/Lerobot.md`；新的真机开发请到 real 仓库继续。
 
 ## VLA 具身仿真环境（当前主线）
 
@@ -93,17 +93,64 @@ python scripts/build_m20_mujoco_model.py
 python scripts/m20_mujoco_observation_smoke.py
 ```
 
+MuJoCo 主线脚本的实际归档目录是 `scripts/mujoco/`；上面的根目录路径是
+兼容入口，新实验请直接使用：
+
+```bash
+python scripts/mujoco/prepare_m20_mujoco_asset.py
+python scripts/mujoco/build_m20_mujoco_model.py
+python scripts/mujoco/m20_mujoco_observation_smoke.py
+```
+
 固定运行时为 Python 3.11、MuJoCo 3.3.7 和 PyTorch 2.7.0/CUDA 12.8。
-`scripts/m20_mujoco_observation_smoke.py` 生成前后 RGB、72 线 LiDAR、
+`scripts/mujoco/m20_mujoco_observation_smoke.py` 生成前后 RGB、72 线 LiDAR、
 `qpos/qvel` 和语言指令；策略输入严禁包含目标坐标、语义掩码或仿真物体位姿。
 运行产物均在忽略的 `.runtime/` 下。
+
+### VLA 软件结构
+
+MuJoCo VLA 代码已经工程化为可安装包 `src/m20pro_vla/`。底层执行器的唯一实现是
+`m20pro_vla.low_level.M20LowLevelController`，所有 MuJoCo VLA、未来 SmolVLA/Pi0.5
+适配器、world-model MPC 和评估器都只能向它提交统一的
+`[forward, lateral, yaw, stop]` 机身命令；它负责 12 个腿关节、4 个轮关节、姿态反馈、
+速度限制和制动。不得在策略或实验脚本中复制另一套关节控制。
+
+工程目录、长期接口和产物规则见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，
+完整目录职责见 [`docs/PROJECT_LAYOUT.md`](docs/PROJECT_LAYOUT.md)，
+低层控制合同见 [`configs/m20pro_low_level_v1.yaml`](configs/m20pro_low_level_v1.yaml)。
+历史脚本路径保留为兼容入口，但新代码必须从 `m20pro_vla` 包导入。
+历史 MuJoCo checkpoint 的 `global_v1` 视觉头与当前 `spatial_v2` 均可由回放入口自动识别。
+
+### 统一运行入口（当前已迁移的门禁）
+
+项目不再要求为每次门禁新写一个实验脚本。先在 `m20pro-vla` 环境中安装
+当前包，然后用统一 CLI：
+
+```bash
+python -m pip install -e . --no-deps
+m20pro-vla doctor
+m20pro-vla prepare
+m20pro-vla smoke
+m20pro-vla low-level-gate
+m20pro-vla collect --mode randomized --episodes 1
+m20pro-vla train --help
+m20pro-vla eval --help
+m20pro-vla play --help
+m20pro-vla report
+```
+
+每次运行会自动创建 `.runtime/runs/M20-*/`，保存 `config.json`、
+`command.txt`、`status.json`、`summary.json` 及预留的数据/模型/视频目录。
+`--dry-run` 只检查计划，不占用磁盘。采集、审计、转换、训练、评估、播放
+也可以从同一 CLI 进入；当前这些命令会记录 run context 后转发到
+`scripts/mujoco/` 的兼容实现，待对应包 API 迁移并通过同一合同测试后再收口。
 
 ### 当前验收边界
 
 当前完成的是环境与观测合同，不是导航、VLA、world model 或 sim2sim 成功。
 后续训练仅使用随机多物体场景的 RGB、LiDAR、本体状态和语言；每次闭环验收
-必须保存 H.264 视频、逐 episode JSON 与独立随机布局汇总。项目记录位于
-[`m20pro-VLA.md`](m20pro-VLA.md)。
+必须保存 H.264 视频、逐 episode JSON 与独立随机布局汇总。统一项目记录位于
+[`../../notes/Lerobot.md`](../../notes/Lerobot.md)。
 
 ### 历史 Isaac/SmolVLA 路径（不作为当前主线）
 

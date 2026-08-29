@@ -1,0 +1,52 @@
+schema: m20pro_low_level_v1
+owner: m20pro_vla.low_level.M20LowLevelController
+
+high_level_command:
+  fields: [forward_mps, lateral_mps, yaw_radps, stop]
+  lateral_behavior: retained_in_contract_not_supported_by_current_nonholonomic_roll_mode
+  target_pose_input: prohibited
+  scene_semantics_input: prohibited
+
+low_level_outputs:
+  leg_position_targets: 12
+  wheel_velocity_targets: 4
+  control_period_s: 0.02
+  physics_steps_per_control: 8
+
+feedback:
+  body_height: true
+  roll_pitch: true
+  angular_velocity: true
+  yaw_rate_target_feedback: true
+  wheel_target_slew: true
+  braking_slew: true
+  direction_calibration: positive_yaw_slew_0.030_negative_yaw_slew_0.025
+  terrain_contact_edge_lift: true
+  terrain_contact_traction_boost: true
+  terrain_tilt_safety_recovery: true
+
+acceptance_gates:
+  finite_state_required: true
+  forward_min_height_m: 0.45
+  forward_max_tilt_deg: 8.0
+  stop_drift_m_max: 0.25
+  turn_yaw_change_deg_min: 10.0
+  turn_max_tilt_deg: 8.0
+  turn_min_height_m: 0.45
+  yaw_tracking_required_before_vla_navigation: true
+  rough_terrain_required_before_rough_terrain_vla: true
+
+rough_terrain_gate:
+  schema: m20pro_low_level_rough_terrain_gate_v1
+  profiles: [flat, slope, bumps, step, disturbance]
+  command_contract_unchanged: true
+  terrain_semantics_visible_to_high_level: false
+  max_tilt_deg: 12.0
+  min_base_height_m: 0.42
+  recovery_clear_tilt_deg: 4.0
+  note: slope and external disturbance currently pass; bumps and step recovery must pass before rough-terrain VLA collection
+
+compatibility:
+  smolvla: body_command_only
+  pi05: body_command_only
+  world_model_mpc: body_command_only

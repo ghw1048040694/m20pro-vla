@@ -45,6 +45,8 @@ tasks:
     minimum_rooms: 3
     active_search_required: true
     success_radius_m: 0.8
+    minimum_obstacle_clearance_m: 0.10
+    target_discovery_required_before_reach: true
     hold_seconds: 2.0
   place_navigation:
     minimum_rooms: 3
@@ -85,6 +87,8 @@ gates:
     minimum_success_rate: 0.70
   stage_3_hidden_object_search:
     minimum_success_rate: 0.60
+    minimum_discovery_rate: 0.80
+    minimum_strict_search_obstacle_pass_rate: 0.60
   stage_4_unseen_object_language_generalization:
     minimum_success_rate: 0.40
   stage_5_one_meter_obstacle:
