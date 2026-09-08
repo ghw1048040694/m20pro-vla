@@ -1,0 +1,34 @@
+# Python and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+build/
+dist/
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local runtime data and model artifacts
+.runtime/
+outputs/
+datasets/
+videos/
+logs/
+*.bag
+*.db3
+*.mcap
+*.pcd
+*.ply
+*.pt
+*.pth
+*.onnx
+*.engine
+*.rknn
+*.usd
+
+# Local environment and secrets
+.env
+.env.*

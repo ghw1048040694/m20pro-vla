@@ -1,0 +1,96 @@
+schema: m20pro_vla_eval_v1
+simulation_only: true
+decision_policy:
+  required: pretrained_vision_language_action_model
+  prohibited_primary_planners:
+    - nav2
+    - a_star
+    - amcl
+  allowed_low_level_role: learned_locomotion_and_parkour_experts
+
+sensors:
+  front_rgb: required
+  rear_rgb: required
+  lidar: required
+  proprioception: required
+  privileged_target_pose_at_inference: prohibited
+  simulator_semantic_id_at_inference: prohibited
+
+splits:
+  train:
+    minimum_scenes: 8
+    minimum_object_categories: 12
+    minimum_instruction_templates: 24
+  validation:
+    minimum_scenes: 2
+    disjoint_start_poses: true
+  test_seen_objects:
+    minimum_episodes: 30
+    disjoint_scenes: true
+    disjoint_instructions: true
+  test_unseen_objects:
+    minimum_episodes: 30
+    disjoint_scenes: true
+    disjoint_object_categories: true
+    disjoint_instructions: true
+
+tasks:
+  visible_object_navigation:
+    random_start_yaw_deg: [-180, 180]
+    target_visible_at_start: true
+    success_radius_m: 0.8
+    hold_seconds: 2.0
+  hidden_object_search:
+    target_visible_at_start: false
+    minimum_rooms: 3
+    active_search_required: true
+    success_radius_m: 0.8
+    minimum_obstacle_clearance_m: 0.10
+    target_discovery_required_before_reach: true
+    hold_seconds: 2.0
+  place_navigation:
+    minimum_rooms: 3
+    language_only_goal: true
+    success_radius_m: 1.0
+    hold_seconds: 2.0
+  obstacle_traversal:
+    obstacle_height_m: 1.0
+    bypass_blocked: true
+    approach_learned: true
+    skill_selection_learned: true
+    landing_min_stable_seconds: 2.0
+
+episode_success:
+  no_fall: true
+  no_privileged_goal_input: true
+  target_hold_required: true
+  obstacle_clearance_required_when_present: true
+
+reporting:
+  required_metrics:
+    - success_rate
+    - spl
+    - object_discovery_rate
+    - false_stop_rate
+    - obstacle_clearance_rate
+    - landing_stability_rate
+  required_artifacts:
+    - h264_video_per_episode
+    - per_episode_json
+    - aggregate_json
+  offline_loss_is_acceptance_metric: false
+
+gates:
+  stage_1_pretrained_vla_runtime:
+    minimum_success_rate: null
+  stage_2_visible_object_navigation:
+    minimum_success_rate: 0.70
+  stage_3_hidden_object_search:
+    minimum_success_rate: 0.60
+    minimum_discovery_rate: 0.80
+    minimum_strict_search_obstacle_pass_rate: 0.60
+  stage_4_unseen_object_language_generalization:
+    minimum_success_rate: 0.40
+  stage_5_one_meter_obstacle:
+    minimum_clearance_rate: 0.50
+    minimum_landing_stability_rate: 0.90
