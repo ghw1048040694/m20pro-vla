@@ -6,5 +6,3 @@ overview of the robot, target objects, and obstacles. It is illustrative only
 and should not be read as a success-rate or benchmark claim.
 
 ![M20 Pro object-navigation scene](media/m20-objectnav-scene.jpg)
-
-[Download the M20 Pro object-navigation scene video](media/m20-objectnav-scene.mp4)
