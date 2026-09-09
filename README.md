@@ -1,109 +1,76 @@
-# m20pro-vla
+# M20 Pro 多模态 VLA 导航与具身控制
 
-**m20pro-vla** is the public MuJoCo-first VLA research runtime for the DEEP Robotics M20 Pro platform.
+<p align="center">
+  <strong>RGB + LiDAR + 本体状态 + 语言指令 → Action Chunk → 轮腿机器人闭环执行</strong>
+</p>
 
-It provides a reusable boundary between multimodal high-level policies and a low-level locomotion controller. The public snapshot is intended to make the simulation architecture, observation contract, action contract, and evaluation philosophy easy to understand without exposing private training outputs or deployment material.
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white">
+  <img alt="MuJoCo" src="https://img.shields.io/badge/MuJoCo-3.3-00599C">
+  <img alt="VLA" src="https://img.shields.io/badge/VLA-Multimodal-8A2BE2">
+  <img alt="LiDAR" src="https://img.shields.io/badge/LiDAR-72_beams-00A67E">
+  <img alt="Robot" src="https://img.shields.io/badge/Robot-M20_Pro-222222">
+</p>
 
-> This repository is a compact public research snapshot. It does not include real-robot ROS bring-up, field maps, logs, datasets, checkpoints, private assets, or machine-specific deployment configuration.
+<p align="center">
+  <img src="media/m20-objectnav-scene.jpg" width="820" alt="M20 Pro ObjectNav 仿真场景">
+</p>
 
-## Project focus
+面向 DEEP Robotics M20 Pro 轮腿机器人，构建语言条件 ObjectNav（目标物体导航）与具身控制系统。高层策略融合前后视 RGB、72 线 LiDAR、本体状态和自然语言，输出连续动作块；低层控制器统一负责轮腿动作映射、限幅、制动和姿态稳定。
 
-The current direction is language-conditioned object navigation and embodied control in randomized indoor MuJoCo scenes:
+> 本仓库对应项目的 **VLA / MuJoCo 研究部分**；真实机器人 ROS 2 导航、跨楼层巡检和 Web 监理系统见 [m20pro-supervision-system](https://github.com/ghw1048040694/m20pro-supervision-system)。
 
-- observe front/rear RGB, planar LiDAR, proprioception, and a language instruction;
-- select and approach a visual target without privileged target-world coordinates;
-- navigate around obstacles and recover when a target is initially occluded;
-- convert a high-level action chunk into safe body motion through one reusable low-level controller;
-- evaluate complete closed-loop episodes rather than treating offline loss as success.
+## 项目亮点
 
-The package also keeps the interfaces needed for future VLA policies, world-model scoring, search MPC, dataset auditing, and sim-to-sim validation.
-
-## Architecture
-
-```text
-RGB + 72-beam LiDAR + qpos/qvel + language
-                    │
-                    ▼
-          m20pro_vla.policies
-       visual/language policy latent
-                    │
-                    ▼
-      planning / world-model action chunks
-                    │
-                    ▼
- [forward, lateral, yaw, stop] body command
-                    │
-                    ▼
-       m20pro_vla.low_level
-      M20LowLevelController
-                    │
-                    ▼
-       12 leg joints + 4 wheel joints
-                    │
-                    ▼
-                MuJoCo scene
-```
-
-The low-level controller is the single actuation boundary. Policies and planners must submit the four-field body command instead of directly writing joint trajectories. This keeps gait, posture, braking, terrain recovery, and safety limits in one place.
-
-## Observation and action contract
-
-### Policy observations
-
-The versioned contract requires:
-
-- front RGB image;
-- rear RGB image;
-- 72-beam planar LiDAR;
-- proprioception (`qpos/qvel` features);
-- UTF-8 language instruction;
-- visual history/previous-action features where enabled by the policy.
-
-The intended policy path prohibits simulator-only privileged inputs such as target world position, target geometry ID, simulator object pose, or semantic masks.
-
-### High-level action
-
-```text
-[forward_mps, lateral_mps, yaw_radps, stop]
-```
-
-The command is clipped, rate-limited, converted into leg position targets and wheel velocity targets, and checked for finite values, height, tilt, contact, and braking behavior. The action contract is shared by compact policies, future SmolVLA/Pi0.5 adapters, and world-model MPC.
-
-## Package layout
-
-| Path | Role |
+| 模块 | 完成内容 |
 | --- | --- |
-| `src/m20pro_vla/sim/` | MuJoCo scene creation, RGB/LiDAR/proprioception observations, video helpers |
-| `src/m20pro_vla/low_level/` | Body-command data model, locomotion controller, diagnostics, regression gate |
-| `src/m20pro_vla/policies/` | Compact RGB/LiDAR/language policy implementation |
-| `src/m20pro_vla/planning/` | Search/MPC action-chunk recommendation and obstacle-aware routing |
-| `src/m20pro_vla/world_model/` | Trajectory/action-chunk scoring interfaces |
-| `src/m20pro_vla/data/` | Visibility, history, and dataset-distribution audits |
-| `src/m20pro_vla/runtime/` | Unified run context and runtime artifact bookkeeping |
-| `configs/` | Versioned observation, low-level, and evaluation contracts |
-| `media/` | Small public preview image only |
+| 多模态感知 | 前后视 RGB、72 线 LiDAR、57 维本体状态和 UTF-8 语言指令 |
+| 动作建模 | 一次预测 `8 × 16` 连续动作块，支持缓存、分段执行与滚动重规划 |
+| 轮腿控制 | 12 个腿关节 + 4 个轮关节，统一关节顺序、镜像符号、动作缩放与 PD 参数 |
+| 闭环导航 | 目标搜索、接近、驻停、障碍感知与过期动作拦截 |
+| 风险评估 | World Model / Search MPC 接口，用于候选动作块的短时安全评分 |
 
-## Install
+## 系统架构
 
-The package requires Python 3.11 or newer and MuJoCo 3.3.x:
+```mermaid
+flowchart LR
+    A["前后视 RGB"] --> E["多模态 VLA 策略"]
+    B["72 线 LiDAR"] --> E
+    C["57 维本体状态"] --> E
+    D["语言目标"] --> E
+    E --> F["Action Chunk / Search MPC"]
+    F --> G["速度、转向与停止指令"]
+    G --> H["M20LowLevelController"]
+    H --> I["12 腿关节 + 4 轮关节"]
+    I --> J["MuJoCo 场景"]
+    J --> A
+    J --> B
+    J --> C
+```
+
+## 核心成果
+
+- 完成 M20 Pro URDF/USD 与 MuJoCo 控制接口适配，修正关节顺序、后腿镜像符号、动作缩放及 PD 参数；原生 ONNX 策略连续运行 500 步，前进 `14.72 m` 且无异常终止。
+- 同步采集 RGB、LiDAR、本体状态、语言与 16 维动作数据，使用 9 条有效轨迹构建 `1206` 个训练窗口，最佳验证损失达到 `1.03 × 10⁻⁴`。
+- 建立动作块缓存、滚动重规划和安全执行链路，在固定目标场景中实现语言目标驱动的搜索、接近与驻停，最小目标距离 `0.111 m`。
+- 将高层策略与底层执行解耦，所有策略统一输出 `[forward, lateral, yaw, stop]`，避免 VLA 直接写入关节指令并绕过安全约束。
+
+## 代码导航
+
+| 路径 | 说明 |
+| --- | --- |
+| `src/m20pro_vla/sim/` | MuJoCo 场景、RGB/LiDAR/本体观测与视频工具 |
+| `src/m20pro_vla/policies/` | RGB、LiDAR、语言条件策略 |
+| `src/m20pro_vla/low_level/` | 轮腿低层控制、制动、安全门与回归测试 |
+| `src/m20pro_vla/planning/` | Action Chunk 搜索与 MPC 规划 |
+| `src/m20pro_vla/world_model/` | 轨迹和候选动作块风险评分 |
+| `configs/` | 观测、动作、低层控制与评估合同 |
+
+## 快速开始
 
 ```bash
 python3 -m pip install -e . --no-deps
-```
 
-For the optional VLA path:
-
-```bash
-python3 -m pip install -e '.[vla]'
-```
-
-The public package intentionally does not bundle a robot asset, a trained checkpoint, a dataset, or a simulator-specific private environment. Those resources must be prepared separately and kept outside Git.
-
-## Unified CLI
-
-After installation, use the single lifecycle entry point:
-
-```bash
 m20pro-vla doctor
 m20pro-vla prepare
 m20pro-vla smoke
@@ -111,70 +78,26 @@ m20pro-vla low-level-gate
 m20pro-vla report
 ```
 
-Use `--dry-run` to inspect a command plan without creating run artifacts:
+VLA 可选依赖：
 
 ```bash
-m20pro-vla smoke --dry-run --json
-m20pro-vla low-level-gate --dry-run --json
-```
-
-The compatibility workflows expose the public lifecycle without requiring each experiment to invent a new entry point:
-
-```bash
+python3 -m pip install -e '.[vla]'
 m20pro-vla collect --help
 m20pro-vla train --help
 m20pro-vla eval --help
 m20pro-vla play --help
 ```
 
-Normal runs write summaries under the user runtime directory, not into the source tree. Run IDs, configuration, status, and summary files are designed for local reproducibility and are excluded from the public repository.
+## 接口合同
 
-## Public demo
+| 配置 | 作用 |
+| --- | --- |
+| `configs/m20pro_mujoco_vla_contract_v1.yaml` | 多模态输入、动作表示与数据要求 |
+| `configs/m20pro_low_level_v1.yaml` | 低层控制输出、反馈与安全门 |
+| `configs/m20pro_vla_eval_v1.yaml` | 可见目标、隐藏目标、泛化和障碍评估 |
 
-A small MuJoCo object-navigation scene preview is included for a quick visual overview of the robot, target objects, and obstacles. It is illustrative only and should not be read as a success-rate, benchmark, or real-robot claim.
+公开仓库未包含现场地图、真实机器人驱动、数据集、模型权重及私有资产；这些资源通过本地配置注入，不影响阅读核心架构和接口实现。
 
-![M20 Pro object-navigation scene](media/m20-objectnav-scene.jpg)
+## 关键词
 
-## Evaluation philosophy
-
-Evaluation is staged and closed-loop:
-
-1. **Runtime gate** — verify dependencies, assets, contracts, and observation generation.
-2. **Low-level gate** — verify finite state, forward motion, turning, stopping drift, height, and tilt.
-3. **Visible object navigation** — target is visible at the start and must be reached and held for the required duration.
-4. **Hidden object search** — target is initially occluded; the agent must discover it before reaching it.
-5. **Generalization and obstacle tests** — evaluate disjoint layouts, unseen objects/instructions, clearance, and landing stability where applicable.
-
-Required episode artifacts for serious experiments are per-episode JSON, aggregate JSON, and a local rendered record. A single successful preview, an offline training loss, or a policy that uses privileged coordinates is not sufficient evidence of navigation capability.
-
-## Versioned contracts
-
-The public configuration files make the important boundaries explicit:
-
-- `configs/m20pro_mujoco_vla_contract_v1.yaml` — observations, prohibited privileged inputs, action interface, data requirements, and acceptance rules;
-- `configs/m20pro_low_level_v1.yaml` — low-level outputs, feedback, safety behavior, and regression gates;
-- `configs/m20pro_vla_eval_v1.yaml` — task splits, success definitions, reporting metrics, and staged thresholds.
-
-When changing an input, action field, safety limit, or success definition, update the corresponding contract and the implementation together.
-
-## Scope and limitations
-
-This repository is the MuJoCo/VLA research side of the M20 Pro work. It is not the real-robot ROS 2 supervision system and does not contain hardware bring-up, field networking, platform credentials, or live sensor drivers.
-
-MuJoCo is the primary development and training environment in this public path. Isaac Sim or another simulator may be used for later sim-to-sim checks, but a sim-to-sim result should only be reported after the MuJoCo observation, action, and low-level gates pass.
-
-Current source interfaces are reusable, but they do not by themselves claim a trained policy, benchmark score, or production readiness. Exact results depend on the asset revision, scene distribution, random seed, hardware/simulator versions, and the policy checkpoint used.
-
-## Reproducibility checklist
-
-For each private experiment, preserve:
-
-- code and contract revision;
-- simulator and dependency versions;
-- scene/asset hash and random seed;
-- sensor dimensions and preprocessing;
-- instruction template and train/validation/test split;
-- policy checkpoint and inference device;
-- per-episode success, target discovery, clearance, false-stop, and stability metrics.
-
-Keep datasets, checkpoints, generated videos, logs, and runtime outputs in private experiment storage rather than committing them here.
+`Embodied AI` · `VLA` · `ObjectNav` · `Action Chunk` · `World Model` · `MPC` · `MuJoCo` · `LiDAR` · `Legged-Wheeled Robot`
