@@ -16,23 +16,39 @@ class M20MuJoCoDistributionThresholds:
     min_languages: int = 2
     min_search_anchor_episodes: int = 1
     min_search_varied_episodes: int = 1
+    # Structured scenes (S2/S3) have no anchor/varied start-pose curriculum: the
+    # building itself is resampled, so start pose, doorway and target all move
+    # together. They declare ``search_start_variant == "structured"`` and are
+    # held to this count instead. The default of 0 keeps the legacy gate exactly
+    # as it was, because the structured clause only fires when it is non-zero.
+    min_search_structured_episodes: int = 0
     min_search_successes: int = 1
     min_target_discovered: int = 1
     min_search_clearance_m: float = 0.10
+    min_search_displacement_m: float = 0.50
+    min_base_height_m: float = 0.45
+    max_abs_roll_deg: float = 8.0
+    max_abs_pitch_deg: float = 8.0
 
 
 def _load_episode_metadata(dataset_root: Path) -> list[dict]:
-    summary_path = dataset_root / "dataset_summary.json"
-    if summary_path.is_file():
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        episodes = summary.get("episodes")
-        if isinstance(episodes, list) and episodes:
-            return [item for item in episodes if isinstance(item, dict)]
+    # Training consumes only JSON/NPZ pairs. Dataset summaries can become stale
+    # after composing symlinked views, so they must not inflate audit coverage.
     episodes: list[dict] = []
     for path in sorted(dataset_root.glob("episode_*.json")):
-        if path.is_file():
+        if path.is_file() and path.with_suffix(".npz").is_file():
             episodes.append(json.loads(path.read_text(encoding="utf-8")))
     return episodes
+
+
+def _is_search_episode(item: dict) -> bool:
+    return str(item.get("collection_mode", "")) in {"search", "failure_recovery"}
+
+
+def _attitude_limit(item: dict, axis: str) -> float:
+    return float(item.get(f"max_abs_{axis}_deg", item.get("max_abs_roll_or_pitch_deg", float("inf"))))
+
+
 def audit_m20_mujoco_dataset(
     dataset_root: Path,
     *,
@@ -49,17 +65,17 @@ def audit_m20_mujoco_dataset(
     search_start_modes = Counter(
         str(item.get("search_start_mode", ""))
         for item in episodes
-        if str(item.get("collection_mode", "")) == "search" and item.get("search_start_mode")
+        if _is_search_episode(item) and item.get("search_start_mode")
     )
     search_start_variants = Counter(
         str(item.get("search_start_variant", ""))
         for item in episodes
-        if str(item.get("collection_mode", "")) == "search" and item.get("search_start_variant")
+        if _is_search_episode(item) and item.get("search_start_variant")
     )
     search_policies = Counter(
         str(item.get("search_policy_effective", item.get("search_policy", "")))
         for item in episodes
-        if str(item.get("collection_mode", "")) == "search"
+        if _is_search_episode(item)
     )
     target_labels = Counter(str(item.get("target_label", "")) for item in episodes if item.get("target_label"))
     layout_ids = sorted(
@@ -70,7 +86,7 @@ def audit_m20_mujoco_dataset(
         }
     )
 
-    search_episodes = [item for item in episodes if str(item.get("collection_mode", "")) == "search"]
+    search_episodes = [item for item in episodes if _is_search_episode(item)]
     hidden_search_episodes = [
         item
         for item in search_episodes
@@ -94,6 +110,35 @@ def audit_m20_mujoco_dataset(
     ]
     anchor_search_count = int(search_start_variants.get("anchor", 0))
     varied_search_count = int(search_start_variants.get("varied", 0))
+    structured_search_count = int(search_start_variants.get("structured", 0))
+    stability_records_present = all(
+        "min_base_height" in item
+        and (
+            all(key in item for key in ("max_abs_roll_deg", "max_abs_pitch_deg"))
+            or "max_abs_roll_or_pitch_deg" in item
+        )
+        for item in episodes
+    )
+    unstable_episodes = [
+        int(item.get("episode_id", -1))
+        for item in episodes
+        if (
+            float(item.get("min_base_height", float("-inf"))) < float(thresholds.min_base_height_m)
+            or _attitude_limit(item, "roll") > float(thresholds.max_abs_roll_deg)
+            or _attitude_limit(item, "pitch") > float(thresholds.max_abs_pitch_deg)
+        )
+    ]
+    low_motion_episode_ids = []
+    for item in search_episodes:
+        if item.get("collection_mode") == "failure_recovery":
+            continue
+        start, end = item.get("initial_xy"), item.get("final_xy")
+        if not isinstance(start, list) or not isinstance(end, list) or len(start) != 2 or len(end) != 2:
+            low_motion_episode_ids.append(int(item.get("episode_id", -1)))
+            continue
+        displacement = sum((float(a) - float(b)) ** 2 for a, b in zip(start, end)) ** 0.5
+        if displacement < thresholds.min_search_displacement_m:
+            low_motion_episode_ids.append(int(item.get("episode_id", -1)))
 
     gates = {
         "min_episode_count": len(episodes) >= int(thresholds.min_episodes),
@@ -106,6 +151,10 @@ def audit_m20_mujoco_dataset(
             or (
                 anchor_search_count >= int(thresholds.min_search_anchor_episodes)
                 and varied_search_count >= int(thresholds.min_search_varied_episodes)
+            )
+            or (
+                int(thresholds.min_search_structured_episodes) > 0
+                and structured_search_count >= int(thresholds.min_search_structured_episodes)
             )
         ),
         "search_discovery_present": (
@@ -126,6 +175,9 @@ def audit_m20_mujoco_dataset(
             not hidden_search_episodes
             or (min(clearances) >= float(thresholds.min_search_clearance_m))
         ),
+        "stability_records_present": stability_records_present,
+        "all_episodes_stable": stability_records_present and not unstable_episodes,
+        "all_search_episodes_move": not low_motion_episode_ids,
     }
 
     return {
@@ -150,8 +202,11 @@ def audit_m20_mujoco_dataset(
         "hidden_search_success_count": len(hidden_search_successes),
         "search_anchor_count": anchor_search_count,
         "search_varied_count": varied_search_count,
+        "search_structured_count": structured_search_count,
         "min_obstacle_clearance_m": min(clearances) if clearances else None,
         "mean_obstacle_clearance_m": (sum(clearances) / len(clearances)) if clearances else None,
+        "unstable_episode_ids": unstable_episodes,
+        "low_motion_episode_ids": low_motion_episode_ids,
         "thresholds": {
             "min_episodes": int(thresholds.min_episodes),
             "min_layouts": int(thresholds.min_layouts),
@@ -162,6 +217,10 @@ def audit_m20_mujoco_dataset(
             "min_search_successes": int(thresholds.min_search_successes),
             "min_target_discovered": int(thresholds.min_target_discovered),
             "min_search_clearance_m": float(thresholds.min_search_clearance_m),
+            "min_search_displacement_m": float(thresholds.min_search_displacement_m),
+            "min_base_height_m": float(thresholds.min_base_height_m),
+            "max_abs_roll_deg": float(thresholds.max_abs_roll_deg),
+            "max_abs_pitch_deg": float(thresholds.max_abs_pitch_deg),
         },
         "gates": gates,
         "passed": all(gates.values()),

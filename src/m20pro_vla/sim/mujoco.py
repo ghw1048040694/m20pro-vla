@@ -21,7 +21,7 @@ M20NativeController = M20LowLevelController
 
 WORKSPACE = Path(__file__).resolve().parents[3]
 ASSET = WORKSPACE / ".runtime/mujoco_assets/M20_floating_actuated.xml"
-MESH_ROOT = Path(os.environ.get("M20PRO_VLA_MESH_ROOT", WORKSPACE / "assets" / "m20_meshes"))
+MESH_ROOT = WORKSPACE / "src" / "m20pro_description" / "meshes"
 CONTROL_DT = 0.02
 PHYSICS_STEPS = 8
 IMAGE_WIDTH = 80
@@ -243,11 +243,11 @@ def build_scene(
     # The camera frame is part of the observation contract, not a privileged sensor.
     base.append(ET.Element("camera", {
         "name": "front_rgb", "pos": "0.42 0 0.15",
-        "xyaxes": "0 1 0 -0.174 0 -0.985", "fovy": "65",
+        "xyaxes": "0 -1 0 0.174 0 0.985", "fovy": "65",
     }))
     base.append(ET.Element("camera", {
         "name": "rear_rgb", "pos": "-0.42 0 0.15",
-        "xyaxes": "0 -1 0 0.174 0 -0.985", "fovy": "65",
+        "xyaxes": "0 1 0 -0.174 0 0.985", "fovy": "65",
     }))
     light = light or SceneLightSpec()
     worldbody.insert(0, ET.Element("light", {

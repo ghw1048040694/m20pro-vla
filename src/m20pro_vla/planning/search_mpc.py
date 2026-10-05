@@ -1,40 +1,55 @@
 """Small predictive planner for search/occlusion MuJoCo curricula.
 
-The planner is intentionally lightweight: it uses the real MuJoCo dynamics
-and the canonical M20 low-level controller as the rollout model, then scores a
-small set of primitive body commands over a short horizon. This is not a
-trained world model yet, but it gives the dataset collector an MPC-style
-closed loop for search episodes.
+The planner is intentionally lightweight: it uses the real MuJoCo dynamics and
+the *same* low-level execution backend as the running episode as the rollout
+model, then scores a small set of primitive body commands over a short horizon.
+This is not a trained world model yet, but it gives the dataset collector an
+MPC-style closed loop for search episodes.
+
+The rollout backend is never hardcoded. By default it is derived from the
+controller passed to :meth:`SearchMPCPlanner.recommend`, so a run that executes
+with ``M20_LOW_LEVEL_BACKEND=v5`` also *predicts* with v5 and the lookahead
+cannot drift away from what the episode will actually do. Set
+:attr:`SearchMPCConfig.backend` to pin it explicitly instead; a mismatch with
+the executor is rejected rather than silently scored.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import mujoco
 import numpy as np
 
-from m20pro_vla.low_level import M20BodyCommand, M20LowLevelController, M20LowLevelControllerState
+from m20pro_vla.low_level import (
+    BACKENDS,
+    M20BodyCommand,
+    M20LowLevelController,
+    build_low_level_controller,
+)
 from m20pro_vla.sim.mujoco import ObstacleSpec, obstacle_blocks_segment
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, keeps the import acyclic
+    from m20pro_vla.planning.global_planner import GlobalPlan, GlobalPlanner
 
 
 @dataclass(frozen=True)
 class SearchMPCConfig:
     horizon_steps: int = 8
-    obstacle_padding: float = 0.05
-    target_radius: float = 0.45
+    obstacle_padding: float = 0.45
+    target_radius: float = 0.70
     subgoal_radius: float = 0.35
     subgoal_margin: float = 0.22
-    lane_margin: float = 0.28
+    lane_margin: float = 0.58
     pre_obstacle_margin_x: float = 0.38
     post_obstacle_margin_x: float = 0.42
-    waypoint_radius: float = 0.24
+    waypoint_radius: float = 0.40
     min_forward_speed: float = 0.12
     max_forward_speed: float = 0.35
     yaw_speed: float = 0.15
-    stop_distance: float = 0.48
+    stop_distance: float = 0.65
     progress_weight: float = 12.0
     terminal_distance_weight: float = 2.2
     visibility_weight: float = 3.0
@@ -49,6 +64,18 @@ class SearchMPCConfig:
     stop_penalty_far: float = 2.4
     collision_penalty: float = 12.0
     use_route_planner_when_obstacles: bool = True
+    # Global route planner hooks. They are only consulted when a
+    # ``GlobalPlanner`` is handed to the constructor; on its own,
+    # ``use_route_planner_when_obstacles`` keeps the legacy hand-written detour,
+    # so the S1 open-plane behaviour is byte-for-byte unchanged.
+    global_waypoint_radius: float = 0.35
+    global_replan_interval: int = 40
+    global_replan_deviation: float = 0.35
+    global_stuck_steps: int = 90
+    # Rollout backend. ``None`` follows the executor controller handed to
+    # ``recommend``; a name from ``m20pro_vla.low_level.BACKENDS`` pins it and
+    # must agree with that executor.
+    backend: str | None = None
 
 
 def yaw_from_quaternion_wxyz(quat: np.ndarray | Sequence[float]) -> float:
@@ -112,14 +139,6 @@ def _blocking_obstacle(
     ]
     if blocking:
         return min(blocking, key=lambda item: obstacle_clearance_xy(point_xy, item))
-    if obstacles:
-        point = np.asarray(point_xy, dtype=np.float64)
-        return min(
-            obstacles,
-            key=lambda item: float(
-                np.linalg.norm(point - np.asarray(item.position[:2], dtype=np.float64))
-            ),
-        )
     return None
 
 
@@ -229,14 +248,14 @@ def _route_command(
     bearing = wrap_angle(math.atan2(float(delta[1]), float(delta[0])) - current_yaw)
     if target_distance <= config.stop_distance:
         return M20BodyCommand(0.0, 0.0, 0.0, True), goal_distance, bearing
-    if target_distance <= 0.45:
-        if abs(bearing) > 0.20:
-            forward = 0.0
-        else:
-            forward = 0.04
+    if target_distance <= 0.55:
+        # Do not finish an approach with a prolonged skid turn. Near the goal,
+        # a slow forward/reverse arc closes the last few centimetres while
+        # keeping all four wheels rolling and the stance dynamically loaded.
+        forward = 0.08 if abs(bearing) <= math.pi / 2.0 else -0.08
     elif target_distance <= 0.75:
         if abs(bearing) > 0.35:
-            forward = 0.0
+            forward = 0.08 if abs(bearing) <= math.pi / 2.0 else -0.08
         elif abs(bearing) > 0.18:
             forward = 0.05
         else:
@@ -256,7 +275,7 @@ def _route_command(
         # instead of orbiting past the object.
         forward = min(forward, 0.14)
         yaw_gain *= 1.20
-    yaw = float(np.clip(yaw_gain * bearing, -0.15, 0.15))
+    yaw = float(np.clip(yaw_gain * bearing, -config.yaw_speed, config.yaw_speed))
     return M20BodyCommand(forward, 0.0, yaw, False), goal_distance, bearing
 
 
@@ -267,6 +286,7 @@ class SearchMPCPlanner:
         target_xy: np.ndarray | Sequence[float],
         obstacles: list[ObstacleSpec],
         config: SearchMPCConfig | None = None,
+        global_planner: "GlobalPlanner | None" = None,
     ) -> None:
         self.model = model
         self.target_xy = np.asarray(target_xy, dtype=np.float64)
@@ -274,6 +294,46 @@ class SearchMPCPlanner:
         self.config = config or SearchMPCConfig()
         self.route_phase = 0
         self.route_side_sign = 1.0
+        self.route_obstacle_name: str | None = None
+        # When supplied, a privileged grid planner replaces the hand-written
+        # three-point detour for structured scenes (rooms, corridors). Pass it
+        # only for scenes whose obstacles are real structure: with an empty
+        # obstacle list it would take over the pure-MPC path.
+        self.global_planner = global_planner
+        self._global_plan: "GlobalPlan | None" = None
+        self._global_waypoint_index = 0
+        self._global_steps_since_plan = 0
+        self._global_replans = 0
+        self._global_best_distance = float("inf")
+        self._global_steps_without_progress = 0
+        # One rollout controller per backend, built on first use so the v5 ONNX
+        # session is created once per planner rather than once per candidate
+        # sequence. ``recommend`` restores the executor snapshot before every
+        # sequence, and ``snapshot``/``restore`` cover the full mutable state of
+        # both backends, so sharing one instance is equivalent to building a
+        # fresh one per sequence.
+        self._rollout_controllers: dict[str, M20LowLevelController] = {}
+
+    def _executor_backend(self, controller: M20LowLevelController) -> str:
+        """Return the backend the rollout must use for ``controller``."""
+        if self.config.backend is not None:
+            return self.config.backend
+        for name, controller_class in BACKENDS.items():
+            if type(controller) is controller_class:
+                return name
+        raise TypeError(
+            f"SearchMPCPlanner cannot choose a rollout backend for "
+            f"{type(controller).__name__}; set SearchMPCConfig(backend=...) to "
+            f"one of {tuple(BACKENDS)}."
+        )
+
+    def _rollout_controller(self, controller: M20LowLevelController) -> M20LowLevelController:
+        backend = self._executor_backend(controller)
+        rollout = self._rollout_controllers.get(backend)
+        if rollout is None:
+            rollout = build_low_level_controller(self.model, backend)
+            self._rollout_controllers[backend] = rollout
+        return rollout
 
     def _planning_goal(self, current_xy: np.ndarray) -> tuple[np.ndarray, bool, float]:
         visible = _is_target_visible(current_xy, self.target_xy, self.obstacles, self.config.obstacle_padding)
@@ -326,14 +386,21 @@ class SearchMPCPlanner:
             self.config.obstacle_padding,
         )
         visible = _is_target_visible(current_xy, self.target_xy, self.obstacles, self.config.obstacle_padding)
-        if obstacle is None or visible:
+        if obstacle is None:
             self.route_phase = 2
             self.route_side_sign = 0.0
+            self.route_obstacle_name = None
             route_goal = self.target_xy
         else:
+            if self.route_obstacle_name != obstacle.name:
+                self.route_phase = 0
+                self.route_obstacle_name = obstacle.name
             self.route_side_sign = 1.0 if float(self.target_xy[1] - obstacle.position[1]) >= 0.0 else -1.0
             before, after = self._route_waypoints(obstacle, self.route_side_sign)
-            if self.route_phase == 0 and float(np.linalg.norm(current_xy - before)) <= self.config.waypoint_radius:
+            if self.route_phase == 0 and (
+                float(np.linalg.norm(current_xy - before)) <= self.config.waypoint_radius
+                or float(current_xy[0]) >= float(before[0])
+            ):
                 self.route_phase = 1
             if self.route_phase == 1 and float(np.linalg.norm(current_xy - after)) <= self.config.waypoint_radius:
                 self.route_phase = 2
@@ -362,11 +429,148 @@ class SearchMPCPlanner:
         }
         return command.as_array(), info
 
+    # ------------------------------------------------------- global routing
+
+    def _reset_global_plan(self) -> None:
+        self._global_plan = None
+        self._global_waypoint_index = 0
+        self._global_steps_since_plan = 0
+        self._global_best_distance = float("inf")
+        self._global_steps_without_progress = 0
+
+    @staticmethod
+    def _polyline_distance(
+        point_xy: np.ndarray, points: Sequence[tuple[float, float]]
+    ) -> float:
+        """Shortest distance from ``point_xy`` to a polyline."""
+        if not points:
+            return float("inf")
+        if len(points) == 1:
+            return float(np.linalg.norm(point_xy - np.asarray(points[0], dtype=np.float64)))
+        best = float("inf")
+        for index in range(len(points) - 1):
+            start = np.asarray(points[index], dtype=np.float64)
+            end = np.asarray(points[index + 1], dtype=np.float64)
+            segment = end - start
+            length_sq = float(segment @ segment)
+            if length_sq <= 1.0e-12:
+                best = min(best, float(np.linalg.norm(point_xy - start)))
+                continue
+            t = float(np.clip(float((point_xy - start) @ segment) / length_sq, 0.0, 1.0))
+            best = min(best, float(np.linalg.norm(point_xy - (start + t * segment))))
+        return best
+
+    def _global_plan_is_stale(self, current_xy: np.ndarray) -> bool:
+        plan = self._global_plan
+        if plan is None or not plan.reachable:
+            return True
+        if self._global_steps_since_plan >= int(self.config.global_replan_interval):
+            return True
+        if self._global_steps_without_progress >= int(self.config.global_stuck_steps):
+            return True
+        return (
+            self._polyline_distance(current_xy, plan.waypoints)
+            > float(self.config.global_replan_deviation)
+        )
+
+    def _global_route_goal(self, current_xy: np.ndarray) -> tuple[np.ndarray, int, bool]:
+        """Return (goal waypoint, its index, reached_final) for the current plan."""
+        plan = self._global_plan
+        assert plan is not None
+        waypoints = plan.waypoints
+        last = len(waypoints) - 1
+        index = int(np.clip(self._global_waypoint_index, 0, last))
+        radius = float(self.config.global_waypoint_radius)
+        while index < last:
+            target = np.asarray(waypoints[index], dtype=np.float64)
+            if float(np.linalg.norm(current_xy - target)) > radius:
+                break
+            index += 1
+        self._global_waypoint_index = index
+        return np.asarray(waypoints[index], dtype=np.float64), index, bool(index >= last)
+
+    def _global_route_recommend(
+        self, data: mujoco.MjData
+    ) -> tuple[np.ndarray, dict[str, float | list[float]]]:
+        """Route to the target over the privileged grid instead of a fixed detour."""
+        current_xy = np.asarray(data.qpos[:2], dtype=np.float64)
+        current_yaw = yaw_from_quaternion_wxyz(np.asarray(data.qpos[3:7], dtype=np.float64))
+        target_distance = float(np.linalg.norm(self.target_xy - current_xy))
+        visible = _is_target_visible(
+            current_xy, self.target_xy, self.obstacles, self.config.obstacle_padding
+        )
+        obstacle = _blocking_obstacle(
+            current_xy, self.target_xy, self.obstacles, self.config.obstacle_padding
+        )
+        if obstacle is None:
+            # Nothing between the robot and the target: this is the legacy
+            # ``route_phase == 2`` situation, so aim straight at the target.
+            self._reset_global_plan()
+            route_goal = self.target_xy
+            waypoint_index = -1
+            goal_is_target = True
+        else:
+            self._global_steps_since_plan += 1
+            if target_distance < self._global_best_distance - 0.01:
+                self._global_best_distance = target_distance
+                self._global_steps_without_progress = 0
+            else:
+                self._global_steps_without_progress += 1
+            if self._global_plan_is_stale(current_xy):
+                assert self.global_planner is not None
+                self._global_plan = self.global_planner.plan(current_xy, self.target_xy)
+                self._global_waypoint_index = 0
+                self._global_steps_since_plan = 0
+                self._global_best_distance = target_distance
+                self._global_steps_without_progress = 0
+                self._global_replans += 1
+            if self._global_plan is not None and self._global_plan.reachable:
+                route_goal, waypoint_index, goal_is_target = self._global_route_goal(current_xy)
+            else:
+                # The privileged grid reports the target as unreachable. Fall
+                # back to the legacy local detour rather than emit a truncated
+                # path the robot cannot follow.
+                return self._route_recommend(data)
+
+        command, goal_distance, bearing = _route_command(
+            current_xy,
+            current_yaw,
+            route_goal,
+            target_distance,
+            final_approach=bool(goal_is_target),
+            config=self.config,
+        )
+        plan = self._global_plan
+        info: dict[str, float | list[float]] = {
+            "score": 0.0,
+            "current_distance": target_distance,
+            "bearing": bearing,
+            "planning_goal": route_goal.tolist(),
+            "goal_is_target": bool(goal_is_target),
+            "visible_steps": float(visible),
+            "route_phase": float(2 if goal_is_target else 1),
+            "route_side_sign": 0.0,
+            "route_goal_distance": goal_distance,
+            "best_forward": float(command.forward),
+            "best_yaw": float(command.yaw),
+            "best_stop": float(command.stop),
+            "global_planner": 1.0,
+            "global_replans": float(self._global_replans),
+            "global_waypoint_index": float(waypoint_index),
+            "global_waypoint_count": float(len(plan.waypoints) if plan is not None else 0),
+            "global_plan_reachable": float(1.0 if plan is not None and plan.reachable else 0.0),
+            "global_plan_cost_m": float(plan.cost_m if plan is not None else 0.0),
+            "global_plan_inflation_m": float(plan.inflation_m if plan is not None else 0.0),
+        }
+        return command.as_array(), info
+
     def recommend(
         self,
         data: mujoco.MjData,
         controller: M20LowLevelController,
     ) -> tuple[np.ndarray, dict[str, float | list[float]]]:
+        if self.global_planner is not None:
+            return self._global_route_recommend(data)
         if self.obstacles and self.config.use_route_planner_when_obstacles:
             return self._route_recommend(data)
         start_xy = np.asarray(data.qpos[:2], dtype=np.float64)
@@ -378,6 +582,13 @@ class SearchMPCPlanner:
         sequences = _candidate_sequences(current_distance, bearing, self.config, preferred_side_sign if not goal_is_target else None)
 
         controller_state = controller.snapshot()
+        rollout_controller = self._rollout_controller(controller)
+        if not isinstance(controller_state, type(rollout_controller.snapshot())):
+            raise TypeError(
+                f"the {self._executor_backend(controller)!r} rollout cannot resume a "
+                f"{type(controller_state).__name__} snapshot; give the planner a "
+                "controller whose backend matches SearchMPCConfig.backend."
+            )
         best_score = -float("inf")
         best_command = sequences[-1][0]
         candidate_scores: list[float] = []
@@ -388,7 +599,6 @@ class SearchMPCPlanner:
         for sequence in sequences:
             command = sequence[0]
             rollout_data = clone_data(self.model, data)
-            rollout_controller = M20LowLevelController(self.model)
             rollout_controller.restore(controller_state)
             valid = True
             rolling_score = 0.0

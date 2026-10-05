@@ -1,5 +1,13 @@
 schema: m20pro_low_level_v1
+# The execution layer the gate below certifies. Switched from `analytic` to the
+# RL expert `v5` on 2026-10-03: the analytic controller peaks at 41.8 deg pitch
+# while turning, which is what the VLA inherited as a "nodding" gait.
+low_level_backend: v5
 owner: m20pro_vla.low_level.M20LowLevelController
+owner_note: >-
+  Every acceptance gate in this file is measured through the factory, so the
+  numbers certify whichever backend `low_level_backend` names - not the analytic
+  class alone. The file name is kept for compatibility with existing reports.
 
 high_level_command:
   fields: [forward_mps, lateral_mps, yaw_radps, stop]
@@ -14,16 +22,31 @@ low_level_outputs:
   physics_steps_per_control: 8
 
 feedback:
+  leg_position_actuator_kp: 80.0
+  leg_position_actuator_kv: 0.25
+  wheel_velocity_actuator_kv: 0.3
+  turn_stance_attitude_kp: 1.35
+  turn_stance_rate_kd: 0.20
+  turn_max_leg_stance_offset_rad: 0.24
+  turn_stance_deadband_deg: 0.0
+  turn_stance_ramp_deg: 0.01
+  turn_stance_release_wheel_delta: 0.20
+  wheel_ground_sliding_friction: 0.1
   body_height: true
   roll_pitch: true
   angular_velocity: true
   yaw_rate_target_feedback: true
   wheel_target_slew: true
   braking_slew: true
-  direction_calibration: positive_yaw_slew_0.030_negative_yaw_slew_0.025
+  velocity_calibration: forward_scale_1.0_stop_slew_0.25
+  direction_calibration: yaw_scale_6.0_positive_slew_0.050_negative_slew_0.050
+  stop_height_offset_m: 0.0
   terrain_contact_edge_lift: true
   terrain_contact_traction_boost: true
   terrain_tilt_safety_recovery: true
+  safety_recovery_trigger_height_m: 0.48
+  safety_recovery_clear_height_m: 0.49
+  actuator_gains_consumed_by: scripts/mujoco/build_m20_mujoco_model.py
 
 acceptance_gates:
   finite_state_required: true
@@ -35,6 +58,84 @@ acceptance_gates:
   turn_min_height_m: 0.45
   yaw_tracking_required_before_vla_navigation: true
   rough_terrain_required_before_rough_terrain_vla: true
+  # Constant-speed smoothness bench. The previous gate only measured
+  # height/tilt/drift, so the "hopping" body mode could only be judged from a
+  # closed-loop video. These are NON-REGRESSION bounds around the deployed
+  # execution layer: passing them means the body did not get worse; it does NOT
+  # certify smoothness.
+  #
+  # RE-BASELINED 2026-10-03 analytic -> v5. Stability gates (height, tilt,
+  # drift, turn yaw) are unchanged and v5 passes them with margin. Only the
+  # smoothness bounds moved, because v5 deliberately trades stance stillness for
+  # steering authority: settled roll-rate RMS is 0.121 rad/s vs the analytic
+  # 0.005. The new bounds keep ~1.4x headroom over the v5 measurement so they
+  # still notice a real degradation of the deployed layer.
+  cruise_bench_speed_mps: 0.2
+  cruise_bench_steps: 500
+  cruise_bench_settled_fraction: 0.6
+  cruise_settled_vertical_velocity_rms_mps_max: 0.09
+  cruise_settled_roll_rate_rms_radps_max: 0.18
+  cruise_settled_pitch_rate_rms_radps_max: 0.18
+  cruise_settled_height_range_m_max: 0.020
+  cruise_displacement_min_m: 1.0
+  # Policy-cadence smoothness bench. A SmolVLA policy re-issues the body
+  # command every 10 control steps (0.2 s), which keeps re-exciting the
+  # under-damped pitch mode. The constant-speed bench cannot see that: it reads
+  # settled vertical-velocity RMS ~0.039 m/s where the same body reads ~0.35 m/s
+  # under the policy cadence (closed loop measured ~0.33 m/s). These bounds are
+  # again NON-REGRESSION bounds around the deployed layer under THIS cadence.
+  #
+  # Re-based onto v5 on 2026-10-03 (measured: vv 0.2070, roll_rate 0.3856,
+  # pitch_rate 0.3367, h_range 0.0540). Vertical velocity and pitch rate already
+  # had headroom; roll rate and height range moved.
+  cadence_bench_steps: 500
+  cadence_bench_replan_steps: 10
+  cadence_bench_seed: 20260918
+  cadence_bench_forward_range_mps: [0.0, 0.35]
+  cadence_bench_yaw_range_radps: [-0.15, 0.15]
+  cadence_settled_vertical_velocity_rms_mps_max: 0.45
+  cadence_settled_roll_rate_rms_radps_max: 0.55
+  cadence_settled_pitch_rate_rms_radps_max: 0.50
+  cadence_settled_height_range_m_max: 0.08
+
+open_body_smoothness_item:
+  summary: >-
+    The stance has an under-damped ~5.25 Hz pitch mode (time constant ~10 s)
+    that the policy's 0.2 s command cadence keeps re-exciting. It cannot be
+    fixed with leg actuator damping or lowered stance gains: both destroy the
+    weight transfer needed for skid-steer yaw and tip the robot over during
+    expert driving (measured 2026-09-20). As of 2026-09-21 the excitation is
+    reproducible offline: replaying the policy cadence on a fixed seed puts the
+    settled body jitter at the closed-loop level, so a fix can be screened in
+    seconds instead of one 3-minute closed-loop episode per candidate.
+  evidence:
+    leg_kv_0p0: {turn_yaw_deg: 10.92, settled_pitch_rate_rms_radps: 0.090, expert_delivery: "4/4 success"}
+    leg_kv_0p1: {turn_yaw_deg: 6.85, settled_pitch_rate_rms_radps: 0.0023, expert_delivery: "0/2, tipped over: max pitch 41.8 deg, min base height 0.286 m"}
+    leg_kv_4p0: {turn_yaw_deg: 5.32, settled_pitch_rate_rms_radps: 0.0008, expert_delivery: "closed loop failed: max pitch 39.7 deg, min base height 0.288 m"}
+    hipx_only_kv_4: {turn_yaw_deg: 12.26, note: "hipx is not in the pitch path"}
+    v5_2026_10_03:
+      note: >-
+        The RL expert that became the default execution layer on 2026-10-03.
+        Every stability gate passes with margin; body smoothness is measurably
+        worse than the analytic controller. Both are real: the v5 wheel-leg gait
+        scrubs through a wider stance to steer, and that stance motion is what
+        the smoothness bed reads.
+      stability: {forward_tilt_deg: 1.00, turn_tilt_deg: 1.25, turn_yaw_deg: 22.94, min_base_height_m: 0.554, stop_drift_m: 0.212}
+      cruise_settled: {vertical_velocity_rms_mps: 0.0541, roll_rate_rms_radps: 0.1210, pitch_rate_rms_radps: 0.1176, base_height_range_m: 0.0127}
+      cadence_settled: {vertical_velocity_rms_mps: 0.2070, roll_rate_rms_radps: 0.3856, pitch_rate_rms_radps: 0.3367, base_height_range_m: 0.0540}
+      analytic_reference: {cruise_roll_rate_rms_radps: 0.0053, cadence_roll_rate_rms_radps: 0.0084}
+    cadence_excitation:
+      constant_command_settled: {vertical_velocity_rms_mps: 0.039, pitch_rate_rms_radps: 0.090}
+      policy_cadence_settled: {vertical_velocity_rms_mps: 0.355, pitch_rate_rms_radps: 0.371}
+      closed_loop_measured: {vertical_velocity_rms_mps: 0.334, pitch_rate_rms_radps: 0.478}
+      note: >-
+        The cadence bed reproduces the closed-loop body jitter from the same
+        controller, so the jitter is a command-switching excitation, not an
+        instability under load: the same episodes hold base height >= 0.497 m,
+        |pitch| <= 2.1 deg and zero obstacle contact.
+  next_direction: >-
+    Reduce the excitation or change the turning method; not leg damping. Screen
+    every candidate on the cadence bed first, then confirm on the closed loop.
 
 rough_terrain_gate:
   schema: m20pro_low_level_rough_terrain_gate_v1

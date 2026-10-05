@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "m20pro-vla"
 version = "0.1.0"
-description = "Public M20 Pro MuJoCo VLA simulation core"
+description = "M20 Pro MuJoCo VLA and reusable low-level locomotion stack"
 requires-python = ">=3.11"
 dependencies = [
   "mujoco>=3.3,<3.4",
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-vla = ["torch>=2.7", "pillow>=10", "imageio-ffmpeg>=0.5"]
+vla = ["torch>=2.7", "pillow>=10", "imageio-ffmpeg>=0.5", "onnxruntime>=1.20"]
 dev = ["pytest>=8"]
 
 [project.scripts]

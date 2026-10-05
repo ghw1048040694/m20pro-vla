@@ -15,7 +15,7 @@ WORKSPACE = Path(__file__).resolve().parents[3]
 RUNTIME_ROOT = Path(os.environ.get("M20PRO_VLA_DATA_ROOT", WORKSPACE / ".runtime"))
 ASSET_ROOT = RUNTIME_ROOT / "assets" / "m20_official"
 OFFICIAL_MJCF = ASSET_ROOT / "mjcf" / "M20.xml"
-MESH_ROOT = Path(os.environ.get("M20PRO_VLA_MESH_ROOT", WORKSPACE / "assets" / "m20_meshes"))
+MESH_ROOT = WORKSPACE / "src" / "m20pro_description" / "meshes"
 
 OFFICIAL_M20_COMMIT = "ec30acfa65131cd87f94260b8b2c552fba3b798e"
 OFFICIAL_M20_URL = (
