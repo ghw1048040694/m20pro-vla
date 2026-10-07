@@ -1,6 +1,6 @@
 {
   "schema": "m20pro_vla_experiment_v1",
-  "experiment_id": "m20_s2_v8_far_approach_v1",
+  "experiment_id": "m20_s2_v8_recovery_bodygyro_check_v1",
   "stage": "simulation_hidden_search_to_shadow_candidate",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s2_v8_far_approach_v1",
@@ -11,8 +11,8 @@
     "collection_videos": ".runtime/videos/m20_s2_v8_far_approach_v1",
     "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_far_approach_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/smolvla_m20_s2_v8_far_approach_v1_from_recovery_5000",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_v1_steps5000",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_far_approach_v1_steps5000",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_recovery_approach_v1_steps5000",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_recovery_bodygyro_check_v1",
     "recovery_dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1_recovery",
     "recovery_eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1_recovery_approach_margin_v1"
   },

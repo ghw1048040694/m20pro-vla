@@ -35,10 +35,10 @@ Action (16)::
 
 MuJoCo-specific conventions used here:
 
-* Free-joint ``qvel[3:6]`` holds the *world*-frame angular velocity, so the
-  body-frame value is ``R.T @ qvel[3:6]``.
-* ``qvel[3:6]`` is therefore also what ``M20LowLevelDiagnostics`` reports; that
-  field is left consistent with the analytic controller.
+* Free-joint ``qvel[3:6]`` already holds angular velocity in the local body
+  frame. Rotating it again makes the policy feedback depend on world heading.
+* ``M20LowLevelDiagnostics`` reports that same local angular velocity, as does
+  the analytic controller. Projected gravity still requires ``R.T``.
 """
 
 from __future__ import annotations
@@ -262,7 +262,7 @@ class M20V5PolicyController(M20LowLevelController):
 
     def _observation(self, data: mujoco.MjData, command: np.ndarray) -> np.ndarray:
         rotation = data.xmat[self._base_body_id].reshape(3, 3)
-        angular_velocity = rotation.T @ data.qvel[3:6]
+        angular_velocity = data.qvel[3:6]
         gravity = rotation.T @ np.array((0.0, 0.0, -1.0), dtype=np.float64)
         leg_position = data.qpos[self._leg_observation_qpos] - self._leg_observation_default
         joint_velocity = data.qvel[self._observation_dof]
