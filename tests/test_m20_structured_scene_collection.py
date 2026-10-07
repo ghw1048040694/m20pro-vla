@@ -192,12 +192,54 @@ class StructuredSceneCollectionTest(unittest.TestCase):
             self.ns["_validate_structured_scene_args"](
                 _args(scene="s3", structured_start_mode="visible-approach"))
 
+    def test_far_visible_approach_uses_requested_distances_and_same_scene(self) -> None:
+        near = self._plans("s2", "sampled", structured_start_mode="visible-approach")
+        far = self._plans("s2", "sampled", structured_start_mode="visible-approach",
+                          visible_approach_min_distance=2.4, visible_approach_max_distance=4.2)
+        self.assertEqual(len(near), len(far))
+        for before, after in zip(near, far):
+            self.assertEqual(before.objects, after.objects)
+            self.assertEqual(before.obstacles, after.obstacles)
+            distance = float(np.linalg.norm(after.target_xy - after.start_xy))
+            self.assertGreaterEqual(distance, 2.4)
+            self.assertLessEqual(distance, 4.2)
+            provenance = self.ns["_visible_approach_provenance"](
+                _args(visible_approach_min_distance=2.4, visible_approach_max_distance=4.2), after)
+            self.assertEqual(provenance["visible_approach_distance_range_m"], [2.4, 4.2])
+            self.assertAlmostEqual(provenance["initial_target_distance_m"], distance)
+            self.assertTrue(after.initial_target_visible)
+            self.assertTrue(GlobalPlanner(after.obstacles).plan(
+                tuple(after.start_xy), tuple(after.target_xy)).reachable)
+
+    def test_visible_approach_rejects_invalid_distance_ranges(self) -> None:
+        episode = self._episode("s2", "default")
+        for lower, upper in ((0.0, 3.0), (3.0, 2.0), (float("nan"), 3.0),
+                             (1.6, float("inf"))):
+            with self.subTest(lower=lower, upper=upper), self.assertRaises(ValueError):
+                self.ns["_visible_approach_pose"](
+                    episode, episode.objects[0], [], np.random.default_rng(SEED),
+                    min_distance=lower, max_distance=upper)
+
     def test_structured_scene_rejects_a_budget_that_truncates(self) -> None:
         floor = self.ns["STRUCTURED_SCENE_MIN_STEPS"]
         with self.assertRaises(ValueError) as caught:
             self.ns["_validate_structured_scene_args"](_args(scene="s2", steps=floor - 1))
         self.assertIn("steps", str(caught.exception))
         self.assertTrue(self.ns["_validate_structured_scene_args"](_args(scene="s2", steps=floor)))
+
+    def test_impossible_far_poses_are_reported_without_shortening_distance(self) -> None:
+        import contextlib
+        import io
+        args = _args(scene="s2", scene_episode="sampled", structured_start_mode="visible-approach",
+                     visible_approach_min_distance=100.0, visible_approach_max_distance=101.0)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            plans = self.ns["_structured_plans"](args, np.random.default_rng(SEED))
+        self.assertEqual(plans, [])
+        self.assertEqual(len(args.visible_approach_pose_refusals), LAYOUTS * 3)
+        self.assertTrue(all(item["distance_range_m"] == [100.0, 101.0]
+                            for item in args.visible_approach_pose_refusals))
+        self.assertIn("visible_approach_pose_refused", output.getvalue())
 
     def test_s1_request_is_not_guarded_as_structured(self) -> None:
         self.assertFalse(self.ns["_validate_structured_scene_args"](_args(scene="s1", mode="randomized")))

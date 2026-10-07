@@ -261,6 +261,10 @@ def parse_args() -> argparse.Namespace:
         "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
         help="S2 only: visible-approach starts safely inside the room facing the target; hidden keeps the doorway search curriculum.",
     )
+    parser.add_argument("--visible-approach-min-distance", type=float, default=1.6,
+                        help="Minimum initial goal distance for the S2 visible-approach teacher.")
+    parser.add_argument("--visible-approach-max-distance", type=float, default=3.0,
+                        help="Maximum initial goal distance; infeasible poses are refused, never clamped.")
     parser.add_argument("--layouts", type=int, default=12, help="Counterfactual layouts; each yields one episode per instruction.")
     parser.add_argument("--layout-offset", type=int, default=0, help="First counterfactual layout ID; used only for disjoint collection shards.")
     parser.add_argument("--steps", type=int, default=240)
@@ -660,6 +664,7 @@ def _plan_only_metadata(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
         "search_start_yaw_offset_rad": float(plan.search_start_yaw_offset),
         "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
         "metadata_only": True,
+        **_visible_approach_provenance(args, plan),
         "plan_only": True,
         **task_language,
         "target_label": plan.target_label,
@@ -974,8 +979,26 @@ def _structured_scene_walls(episode, scene: str) -> list[ObstacleSpec]:
     return corridor_all_walls(episode.spec, strict=False)
 
 
-def _visible_approach_pose(episode, target, walls, rng):
+def _visible_approach_provenance(args, plan):
+    return {
+        "initial_target_distance_m": float(np.linalg.norm(plan.target_xy - plan.start_xy)),
+        "visible_approach_distance_range_m": (
+            [float(getattr(args, "visible_approach_min_distance", 1.6)),
+             float(getattr(args, "visible_approach_max_distance", 3.0))]
+            if plan.search_start_variant == "visible-approach" else None
+        ),
+    }
+
+
+class VisibleApproachPoseUnavailable(ValueError):
+    """A valid requested distance range has no safe pose in this scene."""
+
+
+def _visible_approach_pose(episode, target, walls, rng, *, min_distance=1.6, max_distance=3.0):
     """Sample a collision-free, unobstructed approach with useful travel remaining."""
+    if not (math.isfinite(min_distance) and math.isfinite(max_distance)
+            and 0.0 < min_distance <= max_distance):
+        raise ValueError("Visible approach distances must be finite, positive and ordered")
     x0, x1 = episode.spec.interior_x
     y0, y1 = episode.spec.interior_y
     margin = ROBOT_FOOTPRINT_RADIUS_M + 0.15
@@ -984,7 +1007,7 @@ def _visible_approach_pose(episode, target, walls, rng):
         start = np.array((rng.uniform(x0 + margin, x1 - margin),
                           rng.uniform(y0 + margin, y1 - margin)))
         distance = float(np.linalg.norm(goal - start))
-        if not 1.6 <= distance <= 3.0:
+        if not min_distance <= distance <= max_distance:
             continue
         if not _target_visible_from(start, goal, walls):
             continue
@@ -994,7 +1017,7 @@ def _visible_approach_pose(episode, target, walls, rng):
         yaw_offset = float(rng.uniform(-0.55, 0.55))
         yaw = math.atan2(float(goal[1] - start[1]), float(goal[0] - start[0])) + yaw_offset
         return start, _wrap_angle(yaw), yaw_offset
-    raise ValueError("No safe visible-approach start found; refusing this curriculum layout")
+    raise VisibleApproachPoseUnavailable("No safe visible-approach start found; refusing this curriculum layout")
 
 
 def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> list[EpisodePlan]:
@@ -1018,6 +1041,7 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
         # layout would only duplicate geometry under fresh episode ids.
         layout_ids = range(args.layout_offset, args.layout_offset + 1)
     plans: list[EpisodePlan] = []
+    args.visible_approach_pose_refusals = []
     for layout_id in layout_ids:
         layout_seed = args.seed + 1009 * layout_id
         if args.scene_episode == "default":
@@ -1047,7 +1071,20 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
             episode_start = start_xy
             if visible_approach:
                 pose_rng = _appearance_rng(layout_seed, "visible-approach", target_label)
-                episode_start, yaw, yaw_offset = _visible_approach_pose(episode, target_object, walls, pose_rng)
+                try:
+                    episode_start, yaw, yaw_offset = _visible_approach_pose(
+                        episode, target_object, walls, pose_rng,
+                        min_distance=float(getattr(args, "visible_approach_min_distance", 1.6)),
+                        max_distance=float(getattr(args, "visible_approach_max_distance", 3.0)),
+                    )
+                except VisibleApproachPoseUnavailable as exc:
+                    refusal = {"layout_id": layout_id, "target_label": target_label,
+                               "reason": str(exc),
+                               "distance_range_m": [float(getattr(args, "visible_approach_min_distance", 1.6)),
+                                                    float(getattr(args, "visible_approach_max_distance", 3.0))]}
+                    args.visible_approach_pose_refusals.append(refusal)
+                    print(json.dumps({"visible_approach_pose_refused": refusal}), flush=True)
+                    continue
             plans.append(
                 EpisodePlan(
                     episode_id=layout_id * len(OBJECTS) + target_index,
@@ -1574,6 +1611,7 @@ def main() -> None:
             "search_start_yaw_offset_rad": float(plan.search_start_yaw_offset),
             "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
             "metadata_only": args.metadata_only,
+            **_visible_approach_provenance(args, plan),
             **task_language,
             "target_label": plan.target_label,
             "target_xy_privileged_label_only": plan.target_xy.tolist(),
@@ -1766,6 +1804,7 @@ def main() -> None:
             "schema": "m20pro_mujoco_vla_dataset_v1",
             "plan_only": True,
             "scene": args.scene,
+            "visible_approach_pose_refusals": getattr(args, "visible_approach_pose_refusals", []),
             "scene_episode": args.scene_episode,
             "episode_count": len(summaries),
             "episodes": summaries,
@@ -1789,6 +1828,7 @@ def main() -> None:
     summary = {
         "schema": "m20pro_mujoco_vla_dataset_v1",
         "episodes": summaries,
+        "visible_approach_pose_refusals": getattr(args, "visible_approach_pose_refusals", []),
         "success_count": sum(item["success"] for item in summaries),
         "canonical_success_count": sum(bool(item.get("canonical_success", False)) for item in summaries),
         "target_discovered_count": sum(bool(item.get("target_discovered", False)) for item in summaries),
