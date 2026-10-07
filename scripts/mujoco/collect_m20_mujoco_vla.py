@@ -51,6 +51,16 @@ from m20pro_vla.sim.rooms import (
 )
 
 
+def _update_search_stop_tail(previous: int, command: np.ndarray) -> int:
+    """Count actual consecutive stop labels; resumed motion invalidates a hold."""
+    stopped = bool(
+        np.isfinite(command).all()
+        and command[3] >= 0.5
+        and np.all(np.abs(command[:3]) < 1e-6)
+    )
+    return previous + 1 if stopped else 0
+
+
 SEARCH_LAYOUT_TEMPLATES = (
     np.array(((3.50, 0.24), (3.40, 0.34), (3.90, -0.36)), dtype=np.float64),
     np.array(((3.20, 0.32), (3.50, 0.28), (3.80, -0.40)), dtype=np.float64),
@@ -1449,6 +1459,7 @@ def main() -> None:
         target_visible_steps = 0
         min_obstacle_clearance = None
         collected_steps = 0
+        terminal_stop_steps = 0
         initial_target_pixels = None
         terminated_early = False
         try:
@@ -1542,6 +1553,7 @@ def main() -> None:
                             else:
                                 video.stdin.write(front[index].tobytes())
                     collected_steps += 1
+                    terminal_stop_steps = _update_search_stop_tail(terminal_stop_steps, expert)
                 controller.step(data, expert)
                 if step >= args.warmup_steps:
                     contacts = _contacting_obstacles(model, data, obstacle_geom_ids)
@@ -1552,7 +1564,7 @@ def main() -> None:
                     args.mode == "search"
                     and args.search_stop_after_success
                     and reached_step >= 0
-                    and (step - args.warmup_steps) >= reached_step + args.search_success_hold_steps
+                    and terminal_stop_steps >= args.search_success_hold_steps
                 ):
                     terminated_early = True
                     break
@@ -1640,6 +1652,7 @@ def main() -> None:
             "terminated_early": terminated_early,
             "search_stop_after_success": args.search_stop_after_success,
             "search_success_hold_steps": args.search_success_hold_steps,
+            "search_terminal_stop_steps": terminal_stop_steps,
             "warmup_steps": args.warmup_steps,
             "success": success,
             "target_reached_step": reached_step,
@@ -1723,7 +1736,7 @@ def main() -> None:
         }
         quality_gates = {
             "search_reached_and_held": args.mode != "search" or (
-                success and collected_steps - reached_step >= args.search_success_hold_steps
+                success and terminal_stop_steps >= args.search_success_hold_steps
             ),
             "visible_approach_initial_rgb": plan.search_start_variant != "visible-approach" or (
                 initial_target_pixels is not None and initial_target_pixels >= 5
