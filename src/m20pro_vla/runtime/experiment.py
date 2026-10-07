@@ -12,6 +12,23 @@ from m20pro_vla.training import build_standard_training_plan
 DEFAULT_EXPERIMENT_CONFIG = Path("configs/experiment.json")
 
 
+def experiment_low_level_environment(config: dict[str, Any]) -> dict[str, str]:
+    """Pin the execution policy for every physical stage of one experiment."""
+    settings = config.get("low_level") or {}
+    if not settings:
+        return {}
+    backend = str(settings.get("backend", "v5"))
+    if backend not in {"v5", "analytic"}:
+        raise ValueError(f"Unsupported low-level backend: {backend}")
+    environment = {"M20_LOW_LEVEL_BACKEND": backend}
+    if settings.get("policy_onnx"):
+        policy = Path(settings["policy_onnx"]).expanduser().resolve()
+        if not policy.is_file():
+            raise FileNotFoundError(f"Configured low-level policy is missing: {policy}")
+        environment["M20_V5_POLICY_ONNX"] = str(policy)
+    return environment
+
+
 def load_experiment_config(path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("schema") != "m20pro_vla_experiment_v1":
@@ -111,6 +128,7 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
         "experiment_id": config["experiment_id"],
         "config": str(Path(config_path)),
         "paths": paths,
+        "low_level": config.get("low_level", {}),
         "training": training_plan,
         "stages": {
             "convert": {

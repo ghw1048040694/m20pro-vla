@@ -1,26 +1,26 @@
 {
   "schema": "m20pro_vla_experiment_v1",
-  "experiment_id": "m20_s2_room_v5",
+  "experiment_id": "m20_s2_v8_visible_approach_v1",
   "stage": "simulation_hidden_search_to_shadow_candidate",
   "paths": {
-    "raw_dataset": ".runtime/datasets/m20_s2_room_v5",
-    "dataset": ".runtime/datasets/m20_s2_room_v5_curated",
-    "checkpoint_dir": ".runtime/checkpoints/m20_s2_room_v5",
+    "raw_dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1",
+    "dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1_curated",
+    "checkpoint_dir": ".runtime/checkpoints/m20_s2_v8_visible_approach_v1",
     "init_checkpoint": ".runtime/checkpoints/m20_standard_v1_balanced_v7/best.pt",
-    "eval_dir": ".runtime/eval/m20_s2_room_v5",
-    "collection_videos": ".runtime/videos/m20_s2_room_v5",
-    "lerobot_dataset": ".runtime/lerobot/m20_s2_room_v5_curated",
-    "smolvla_prepared_base": ".runtime/cache/smolvla_m20_s2_room_v5_from_v2_5000",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_room_v5_ft1_steps13500",
-    "smolvla_eval_dir": ".runtime/eval/m20_s2_room_v5_ft1_steps13500",
-    "recovery_dataset": ".runtime/datasets/m20_failure_recovery_ft1",
-    "recovery_eval_dir": ".runtime/eval/m20_failure_recovery_ft1_followup"
+    "eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1",
+    "collection_videos": ".runtime/videos/m20_s2_v8_visible_approach_v1",
+    "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_visible_approach_v1_curated",
+    "smolvla_prepared_base": ".runtime/cache/smolvla_m20_s2_v8_visible_approach_v1_from_v2_5000",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_visible_approach_v1_steps13500",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_visible_approach_v1_steps13500",
+    "recovery_dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1_recovery",
+    "recovery_eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1_recovery"
   },
   "collection": {
     "mode": "search",
-    "layouts": 11,
-    "layout_offset": 2014,
-    "steps": 3000,
+    "layouts": 8,
+    "layout_offset": 4000,
+    "steps": 1400,
     "search_start_mode": "balanced",
     "search_policy": "waypoint",
     "search_terrain_profile": "flat",
@@ -28,7 +28,7 @@
     "language_mode": "varied",
     "policy_width": 160,
     "policy_height": 96,
-    "video": true,
+    "video": false,
     "quality_min_base_height_m": 0.45,
     "quality_max_abs_roll_deg": 8.0,
     "quality_max_abs_pitch_deg": 8.0,
@@ -39,7 +39,10 @@
     "quality_min_search_displacement_m": 0.5,
     "scene": "s2",
     "scene_episode": "sampled",
-    "quality_max_obstacle_contact_steps": 200
+    "quality_max_obstacle_contact_steps": 0,
+    "structured_start_mode": "visible-approach",
+    "seed": 20261007,
+    "skip_existing": true
   },
   "environment": {
     "require_wsl2": true,
@@ -76,7 +79,7 @@
   "smolvla": {
     "conda_env": "lerobot",
     "base_model": "lerobot/smolvla_base",
-    "repo_id": "m20pro/m20_s2_room_v5_curated",
+    "repo_id": "m20pro/m20_s2_v8_visible_approach_v1_curated",
     "source_fps": 50,
     "frame_stride": 2,
     "terminal_stop_repeat": 8,
@@ -111,7 +114,7 @@
     "obstacle_contact_tolerance_steps": 10
   },
   "recovery_collection": {
-    "episode_ids": "6001,6023,6024",
+    "episode_ids": "6042,6045,6048",
     "write_videos": false,
     "recovery_max_episodes": 2,
     "recovery_max_steps": 1100,
@@ -153,5 +156,11 @@
     "target_runtime": "shadow",
     "direct_cmd_vel_allowed": false,
     "per_dddmr_map_lora_required": false
+  },
+  "low_level": {
+    "backend": "v5",
+    "policy_onnx": ".runtime/policies/m20_flat_v8/policy_single.onnx",
+    "policy_version": "v8",
+    "nominal_mujoco_friction": 0.6
   }
 }

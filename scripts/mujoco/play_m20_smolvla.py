@@ -775,8 +775,8 @@ def summarize_fleet(reports: list[dict], acceptance: dict) -> dict:
             "stable attitude + zero MuJoCo obstacle contact"
         ),
         "in_distribution_note": (
-            "Every collected layout participates in SmolVLA training, so this is an "
-            "in-distribution learner-only closed loop; it is not a held-out generalization result."
+            "This panel alone does not establish held-out generalization. Verify exact scene "
+            "overlap with the training dataset and the initialization policy's training history."
         ),
         "episode_count": total,
         "success_count": len(successes),

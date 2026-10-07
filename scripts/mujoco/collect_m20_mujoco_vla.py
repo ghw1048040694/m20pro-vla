@@ -31,6 +31,7 @@ from m20pro_vla.sim.mujoco import (
     open_video,
 )
 from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
+from m20pro_vla.data.visibility import target_pixel_count
 from m20pro_vla.planning import (
     GlobalPlanner,
     GlobalPlannerConfig,
@@ -256,6 +257,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--episodes", type=int, default=24)
+    parser.add_argument(
+        "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
+        help="S2 only: visible-approach starts safely inside the room facing the target; hidden keeps the doorway search curriculum.",
+    )
     parser.add_argument("--layouts", type=int, default=12, help="Counterfactual layouts; each yields one episode per instruction.")
     parser.add_argument("--layout-offset", type=int, default=0, help="First counterfactual layout ID; used only for disjoint collection shards.")
     parser.add_argument("--steps", type=int, default=240)
@@ -969,6 +974,29 @@ def _structured_scene_walls(episode, scene: str) -> list[ObstacleSpec]:
     return corridor_all_walls(episode.spec, strict=False)
 
 
+def _visible_approach_pose(episode, target, walls, rng):
+    """Sample a collision-free, unobstructed approach with useful travel remaining."""
+    x0, x1 = episode.spec.interior_x
+    y0, y1 = episode.spec.interior_y
+    margin = ROBOT_FOOTPRINT_RADIUS_M + 0.15
+    goal = np.asarray(target.position, dtype=np.float64)
+    for _ in range(512):
+        start = np.array((rng.uniform(x0 + margin, x1 - margin),
+                          rng.uniform(y0 + margin, y1 - margin)))
+        distance = float(np.linalg.norm(goal - start))
+        if not 1.6 <= distance <= 3.0:
+            continue
+        if not _target_visible_from(start, goal, walls):
+            continue
+        if any(float(np.linalg.norm(start - np.asarray(obj.position))) < 0.65
+               for obj in episode.objects):
+            continue
+        yaw_offset = float(rng.uniform(-0.55, 0.55))
+        yaw = math.atan2(float(goal[1] - start[1]), float(goal[0] - start[0])) + yaw_offset
+        return start, _wrap_angle(yaw), yaw_offset
+    raise ValueError("No safe visible-approach start found; refusing this curriculum layout")
+
+
 def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> list[EpisodePlan]:
     """Build S2/S3 episode plans from the room/corridor scene modules.
 
@@ -1014,6 +1042,12 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
             if target_object is None:
                 continue
             target_xy = np.asarray(target_object.position, dtype=np.float64)
+            visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
+            yaw, yaw_offset = float(episode.start_yaw), 0.0
+            episode_start = start_xy
+            if visible_approach:
+                pose_rng = _appearance_rng(layout_seed, "visible-approach", target_label)
+                episode_start, yaw, yaw_offset = _visible_approach_pose(episode, target_object, walls, pose_rng)
             plans.append(
                 EpisodePlan(
                     episode_id=layout_id * len(OBJECTS) + target_index,
@@ -1023,19 +1057,19 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
                     search_obstacle_template_id=None,
                     search_secondary_obstacle_template_id=None,
                     search_outer_obstacle_template_id=None,
-                    yaw=float(episode.start_yaw),
-                    start_xy=start_xy,
+                    yaw=yaw,
+                    start_xy=episode_start,
                     target_xy=target_xy,
                     target_label=target_label,
                     objects=list(episode.objects),
                     obstacles=list(walls),
                     scene_light=scene_light,
                     search_start_mode="structured",
-                    search_start_variant="structured",
+                    search_start_variant="visible-approach" if visible_approach else "structured",
                     search_start_xy_template_id=-1,
-                    search_start_yaw_offset=0.0,
-                    search_required=True,
-                    initial_target_visible=_target_visible_from(start_xy, target_xy, walls),
+                    search_start_yaw_offset=yaw_offset,
+                    search_required=not visible_approach,
+                    initial_target_visible=_target_visible_from(episode_start, target_xy, walls),
                     scene_kind=args.scene,
                     scene_name=str(episode.spec.name),
                 )
@@ -1053,14 +1087,18 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
     keeps a poisoned episode out of the dataset.
     """
     structured = args.scene in {"s2", "s3"}
+    visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
+    if visible_approach and args.scene != "s2":
+        raise ValueError("--structured-start-mode visible-approach requires --scene s2")
     if structured and args.mode != "search":
         raise ValueError(
             f"--scene {args.scene} requires --mode search: structured episodes are solved by the "
             "privileged teacher, not by the open-plane approach command."
         )
-    if structured and args.steps < STRUCTURED_SCENE_MIN_STEPS:
+    min_steps = 600 if visible_approach else STRUCTURED_SCENE_MIN_STEPS
+    if structured and args.steps < min_steps:
         raise ValueError(
-            f"--scene {args.scene} needs --steps >= {STRUCTURED_SCENE_MIN_STEPS}; the measured teacher "
+            f"--scene {args.scene} needs --steps >= {min_steps}; the measured teacher "
             "arrival is ~1740-2220 steps and a tighter budget would silently truncate episodes before "
             "the target is reached."
         )
@@ -1374,6 +1412,7 @@ def main() -> None:
         target_visible_steps = 0
         min_obstacle_clearance = None
         collected_steps = 0
+        initial_target_pixels = None
         terminated_early = False
         try:
             for step in range(args.steps + args.warmup_steps):
@@ -1446,6 +1485,8 @@ def main() -> None:
                         front[index] = renderer.render().copy()
                         renderer.update_scene(data, camera="rear_rgb")
                         rear[index] = renderer.render().copy()
+                        if index == 0:
+                            initial_target_pixels = target_pixel_count(front[index], plan.target_label) + target_pixel_count(rear[index], plan.target_label)
                         lidar[index] = planar_lidar(model, data)
                         proprio[index] = proprioception(model, data)
                         action[index] = expert.astype(np.float32)
@@ -1583,6 +1624,7 @@ def main() -> None:
             "curriculum_success_radius": curriculum_success_radius,
             "search_required": plan.search_required,
             "initial_target_visible": plan.initial_target_visible,
+            "initial_target_pixels_policy_rgb": initial_target_pixels,
             "search_layout_template_id": plan.search_template_id,
             "search_obstacle_template_id": plan.search_obstacle_template_id,
             "search_secondary_obstacle_template_id": plan.search_secondary_obstacle_template_id,
@@ -1642,6 +1684,12 @@ def main() -> None:
             ),
         }
         quality_gates = {
+            "search_reached_and_held": args.mode != "search" or (
+                success and collected_steps - reached_step >= args.search_success_hold_steps
+            ),
+            "visible_approach_initial_rgb": plan.search_start_variant != "visible-approach" or (
+                initial_target_pixels is not None and initial_target_pixels >= 5
+            ),
             "min_base_height": min_height >= float(args.quality_min_base_height_m),
             "max_abs_roll": max_abs_roll_deg <= float(args.quality_max_abs_roll_deg),
             "max_abs_pitch": max_abs_pitch_deg <= float(args.quality_max_abs_pitch_deg),

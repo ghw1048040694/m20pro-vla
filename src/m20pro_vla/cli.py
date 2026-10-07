@@ -118,6 +118,8 @@ def _print(payload: Any, compact: bool = False) -> None:
 def _context(args: argparse.Namespace, kind: str, config: dict[str, Any]) -> RunContext | None:
     if args.dry_run:
         return None
+    if getattr(args, "command", None) == "experiment":
+        config = {**config, "experiment": json.loads(args.config.read_text(encoding="utf-8"))}
     return RunContext.create(
         kind,
         [sys.executable, *sys.argv],
@@ -338,7 +340,7 @@ def _dispatch_lerobot_stage_environment(args: argparse.Namespace) -> int | None:
 def command_experiment(args: argparse.Namespace) -> int:
     context: RunContext | None = None
     try:
-        from .runtime.experiment import build_experiment_plan, load_experiment_config
+        from .runtime.experiment import build_experiment_plan, load_experiment_config, experiment_low_level_environment
         from .training import evaluate_training_candidate
 
         plan = build_experiment_plan(args.config)
@@ -346,6 +348,7 @@ def command_experiment(args: argparse.Namespace) -> int:
         if args.dry_run or stage == "plan":
             plan["dry_run"] = bool(args.dry_run)
             return _finish(None, True, plan, compact=args.json)
+        os.environ.update(experiment_low_level_environment(load_experiment_config(args.config)))
         if stage in {"convert", "train-smolvla"}:
             dispatch_code = _dispatch_lerobot_stage_environment(args)
             if dispatch_code is not None:

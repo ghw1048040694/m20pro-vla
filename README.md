@@ -86,6 +86,12 @@ flowchart LR
 
 策略输入被严格限制为 **front_rgb / rear_rgb / planar_lidar_72 / qpos_qvel / language_instruction**；目标世界坐标、仿真物体位姿、几何 ID、语义掩码一律禁止进入策略。所有策略统一输出 `[forward, lateral, yaw, stop]` 机身命令，由低层控制器负责关节映射与安全约束，**禁止 VLA 直接写入关节指令**。
 
+## 当前实验（2026-10-07）
+
+保持 v8 步态与 MuJoCo 摩擦系数 0.6，新增 S2 初始可见趋近补充课程。默认隐藏搜索课程保留；补充课程只改变机器人起点，不改变房间与三目标布局，继续使用规划教师，质量门要求到达并保留停止尾段、姿态达标、零墙体接触和首帧 RGB 可见。
+
+唯一入口仍为 `configs/experiment.json`：`low_level` 显式固定低层权重，运行记录保存完整实验配置。补采和训练结果以实际记录为准，当前尚无新模型的闭环结论；评测报告不再预先断言所有布局参加过训练。详细实验日志在聚合仓库 [Lerobot.md](https://github.com/ghw1048040694/VLA-Learning/blob/main/notes/Lerobot.md)。
+
 ## 工程进展
 
 以下为当前快照已完成的工作与工作方法。各项指标仍在迭代，本页不对效果下结论。
