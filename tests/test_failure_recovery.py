@@ -1,9 +1,25 @@
 import unittest
 
-from m20pro_vla.data.failure_recovery import build_recovery_planner, select_states
+import numpy as np
+
+from m20pro_vla.data.failure_recovery import build_recovery_planner, restore_controller_state, select_states
+from m20pro_vla.low_level.policy_v5 import M20V5PolicyController, M20V5PolicyControllerState
 
 
 class FailureRecoveryTest(unittest.TestCase):
+    def test_restores_real_policy_snapshot_dataclass(self):
+        # Snapshot/restore require no inference session; exercise the actual API.
+        controller = object.__new__(M20V5PolicyController)
+        controller.last_action = np.zeros(16)
+        controller.safety_recovery_active = False
+        state = M20V5PolicyControllerState(np.arange(16), True)
+        restore_controller_state(controller, state, backend="v5", step=25)
+        np.testing.assert_array_equal(controller.last_action, state.last_action)
+        self.assertTrue(controller.safety_recovery_active)
+        with self.assertRaisesRegex(ValueError, "matching backend"):
+            restore_controller_state(controller, {"last_action": np.zeros(16)}, backend="analytic", step=25)
+        np.testing.assert_array_equal(controller.last_action, state.last_action)
+
     def test_room_recovery_uses_doorway_aware_teacher(self):
         for kind in ("s2", "s3"):
             with self.subTest(kind=kind):

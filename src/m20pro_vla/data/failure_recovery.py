@@ -59,6 +59,18 @@ def select_states(states: list[dict], max_episodes: int) -> list[dict]:
     return selected
 
 
+def restore_controller_state(controller, captured, *, backend, step):
+    """Restore a typed executor snapshot only into its matching execution layer."""
+    expected = controller.snapshot()
+    if type(captured) is not type(expected):
+        raise ValueError(
+            f"recovery state at step {step} was captured by backend {backend!r} "
+            f"as {type(captured).__name__}, but {type(controller).__name__} "
+            f"requires {type(expected).__name__}; re-collect with the matching backend"
+        )
+    controller.restore(captured)
+
+
 def build_recovery_planner(model, target_xy, obstacles, metadata, success_radius):
     """Use the same doorway-aware teacher as structured demonstration collection."""
     structured = metadata.get("scene_kind") in {"s2", "s3"}
@@ -134,17 +146,9 @@ def collect_continuations(
             # written before the field existed fall back to the factory default.
             state_backend = state.get("low_level_backend")
             controller = build_low_level_controller(model, state_backend)
-            captured_keys = set(state["controller"])
-            expected_keys = set(controller.snapshot())
-            if captured_keys != expected_keys:
-                raise ValueError(
-                    f"recovery state at step {state.get('step')} was captured by "
-                    f"backend {state_backend!r} but its snapshot has keys "
-                    f"{sorted(captured_keys)} while {type(controller).__name__} expects "
-                    f"{sorted(expected_keys)}; re-collect the recovery states with "
-                    f"the matching backend"
-                )
-            controller.restore(state["controller"])
+            restore_controller_state(
+                controller, state["controller"], backend=state_backend, step=state.get("step"),
+            )
             planner = build_recovery_planner(model, target_xy, obstacles, metadata, success_radius)
 
             frames: dict[str, list[np.ndarray]] = {
