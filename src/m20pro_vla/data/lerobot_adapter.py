@@ -61,16 +61,19 @@ def m20_lerobot_frame_indices(
     *,
     frame_stride: int,
     terminal_stop_repeat: int = 1,
+    collection_mode: str = "search",
+    recovery_terminal_stop_repeat: int = 1,
 ) -> list[int]:
-    """Select source frames and rebalance the rare terminal stop state."""
+    """Rebalance demonstration stops without inflating short correction tails."""
     actions = np.asarray(actions)
     if actions.ndim != 2 or actions.shape[1] != len(M20_ACTION_NAMES):
         raise ValueError(f"Expected Nx{len(M20_ACTION_NAMES)} actions, got {actions.shape}")
-    if frame_stride <= 0 or terminal_stop_repeat <= 0:
+    if frame_stride <= 0 or terminal_stop_repeat <= 0 or recovery_terminal_stop_repeat <= 0:
         raise ValueError("frame_stride and terminal_stop_repeat must be positive")
+    stop_repeat = recovery_terminal_stop_repeat if collection_mode == "failure_recovery" else terminal_stop_repeat
     indices: list[int] = []
     for index in range(0, len(actions), frame_stride):
-        repeat = terminal_stop_repeat if float(actions[index, 3]) >= 0.5 else 1
+        repeat = stop_repeat if float(actions[index, 3]) >= 0.5 else 1
         indices.extend([index] * repeat)
     return indices
 
@@ -83,6 +86,7 @@ def convert_m20_to_lerobot(
     source_fps: int = 50,
     frame_stride: int = 2,
     terminal_stop_repeat: int = 1,
+    recovery_terminal_stop_repeat: int = 1,
     overwrite: bool = False,
     use_videos: bool = True,
     vcodec: str = "h264",
@@ -90,7 +94,7 @@ def convert_m20_to_lerobot(
     """Convert paired M20 NPZ/JSON episodes using LeRobot's public writer API."""
     if frame_stride <= 0 or source_fps % frame_stride:
         raise ValueError("frame_stride must be positive and divide source_fps")
-    if terminal_stop_repeat <= 0:
+    if terminal_stop_repeat <= 0 or recovery_terminal_stop_repeat <= 0:
         raise ValueError("terminal_stop_repeat must be positive")
     pairs = _episode_pairs(Path(source))
     output = Path(output)
@@ -141,6 +145,8 @@ def convert_m20_to_lerobot(
     sampled_frames_before_repeat = 0
     stop_frames = 0
     episode_frames: list[int] = []
+    frames_by_mode: dict[str, int] = {}
+    stops_by_mode: dict[str, int] = {}
     for npz_path, json_path in pairs:
         arrays = np.load(npz_path)
         metadata = json.loads(json_path.read_text(encoding="utf-8"))
@@ -154,10 +160,14 @@ def convert_m20_to_lerobot(
         states = m20_smolvla_state(arrays["proprio"], arrays["lidar"])
         task = str(metadata["task_text"])
         count = 0
+        mode = str(metadata.get("collection_mode", "legacy"))
+        episode_stops = 0
         frame_indices = m20_lerobot_frame_indices(
             arrays["action"],
             frame_stride=frame_stride,
             terminal_stop_repeat=terminal_stop_repeat,
+            collection_mode=mode,
+            recovery_terminal_stop_repeat=recovery_terminal_stop_repeat,
         )
         sampled_frames_before_repeat += len(range(0, lengths["action"], frame_stride))
         for index in frame_indices:
@@ -171,10 +181,13 @@ def convert_m20_to_lerobot(
                 }
             )
             stop_frames += int(float(arrays["action"][index, 3]) >= 0.5)
+            episode_stops += int(float(arrays["action"][index, 3]) >= 0.5)
             count += 1
         dataset.save_episode()
         total_frames += count
         episode_frames.append(count)
+        frames_by_mode[mode] = frames_by_mode.get(mode, 0) + count
+        stops_by_mode[mode] = stops_by_mode.get(mode, 0) + episode_stops
     dataset.finalize()
     report = {
         "schema": "m20pro_lerobot_conversion_v1",
@@ -185,6 +198,9 @@ def convert_m20_to_lerobot(
         "frames": total_frames,
         "sampled_frames_before_terminal_repeat": sampled_frames_before_repeat,
         "terminal_stop_repeat": terminal_stop_repeat,
+        "recovery_terminal_stop_repeat": recovery_terminal_stop_repeat,
+        "frames_by_collection_mode": frames_by_mode,
+        "stop_frames_by_collection_mode": stops_by_mode,
         "stop_frames": stop_frames,
         "stop_frame_fraction": stop_frames / total_frames,
         "episode_frames_min": min(episode_frames),

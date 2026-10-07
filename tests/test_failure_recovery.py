@@ -7,6 +7,13 @@ from m20pro_vla.low_level.policy_v5 import M20V5PolicyController, M20V5PolicyCon
 
 
 class FailureRecoveryTest(unittest.TestCase):
+    def test_second_state_covers_approach_instead_of_only_near_stop(self):
+        states = [
+            {"step": step, "target_distance": distance, "obstacle_clearance": 1.0}
+            for step, distance in ((0, 2.0), (200, 1.7), (300, 1.2), (350, 1.0), (400, 0.98))
+        ]
+        self.assertEqual([s["step"] for s in select_states(states, 2)], [400, 200])
+
     def test_restores_real_policy_snapshot_dataclass(self):
         # Snapshot/restore require no inference session; exercise the actual API.
         controller = object.__new__(M20V5PolicyController)

@@ -397,6 +397,7 @@ def command_experiment(args: argparse.Namespace) -> int:
                 source_fps=int(settings["source_fps"]),
                 frame_stride=int(settings["frame_stride"]),
                 terminal_stop_repeat=int(settings.get("terminal_stop_repeat", 1)),
+                recovery_terminal_stop_repeat=int(settings.get("recovery_terminal_stop_repeat", 1)),
                 use_videos=bool(settings.get("use_videos", True)),
                 vcodec=str(settings.get("vcodec", "h264")),
             )

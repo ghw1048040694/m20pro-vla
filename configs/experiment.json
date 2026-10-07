@@ -14,7 +14,7 @@
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_visible_approach_v1_steps13500",
     "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_visible_approach_v1_steps13500",
     "recovery_dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1_recovery",
-    "recovery_eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1_recovery"
+    "recovery_eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1_recovery_approach_margin_v1"
   },
   "collection": {
     "mode": "search",
@@ -95,7 +95,8 @@
     "use_amp": false,
     "use_peft": false,
     "init_policy": ".runtime/checkpoints/smolvla_m20_hidden_search_v2_steps5000/checkpoints/005000/pretrained_model",
-    "offline": true
+    "offline": true,
+    "recovery_terminal_stop_repeat": 1
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s2_room_v5",

@@ -43,6 +43,10 @@ def select_states(states: list[dict], max_episodes: int) -> list[dict]:
         return []
     closest = min(states, key=lambda state: state["target_distance"])
     earlier = [state for state in states if state["step"] <= closest["step"] - 50]
+    # A fixed 50-step offset often gives two almost identical near-stop states.
+    # Include an earlier approach with at least 0.5 m still to travel instead.
+    approach = [state for state in earlier if state["target_distance"] >= closest["target_distance"] + 0.5]
+    earlier = approach or earlier
     ranked = [
         closest,
         max(earlier, key=lambda state: state["step"]) if earlier else states[0],
