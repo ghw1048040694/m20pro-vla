@@ -10,7 +10,9 @@ import mujoco
 import numpy as np
 
 from m20pro_vla.low_level import M20LowLevelController, backend_of, build_low_level_controller
-from m20pro_vla.planning import SearchMPCConfig, SearchMPCPlanner, obstacle_clearance_xy
+from m20pro_vla.planning import (
+    GlobalPlanner, GlobalPlannerConfig, SearchMPCConfig, SearchMPCPlanner, obstacle_clearance_xy,
+)
 from m20pro_vla.sim.mujoco import planar_lidar, proprioception
 
 
@@ -55,6 +57,22 @@ def select_states(states: list[dict], max_episodes: int) -> list[dict]:
         if len(selected) >= max_episodes:
             break
     return selected
+
+
+def build_recovery_planner(model, target_xy, obstacles, metadata, success_radius):
+    """Use the same doorway-aware teacher as structured demonstration collection."""
+    structured = metadata.get("scene_kind") in {"s2", "s3"}
+    return SearchMPCPlanner(
+        model,
+        target_xy,
+        obstacles,
+        SearchMPCConfig(
+            target_radius=success_radius,
+            stop_distance=success_radius,
+            use_route_planner_when_obstacles=True,
+        ),
+        global_planner=GlobalPlanner(obstacles, GlobalPlannerConfig()) if structured else None,
+    )
 
 
 def collect_continuations(
@@ -127,16 +145,7 @@ def collect_continuations(
                     f"the matching backend"
                 )
             controller.restore(state["controller"])
-            planner = SearchMPCPlanner(
-                model,
-                target_xy,
-                obstacles,
-                SearchMPCConfig(
-                    target_radius=success_radius,
-                    stop_distance=success_radius,
-                    use_route_planner_when_obstacles=True,
-                ),
-            )
+            planner = build_recovery_planner(model, target_xy, obstacles, metadata, success_radius)
 
             frames: dict[str, list[np.ndarray]] = {
                 "front_rgb": [], "rear_rgb": [], "lidar": [], "proprio": [], "action": [],
@@ -204,11 +213,14 @@ def collect_continuations(
                 **{key: metadata[key] for key in (
                     "schema", "layout_id", "terrain_profile", "task_text", "target_label",
                     "target_xy_privileged_label_only", "objects", "obstacles", "scene_light",
-                    "search_start_variant", "search_start_mode", "search_policy_effective",
+                    "search_start_variant", "search_start_mode", "scene_kind", "scene_name", "scene_episode",
                     "task_language", "task_template_id",
                 ) if key in metadata},
                 "episode_id": episode_id,
                 "collection_mode": "failure_recovery",
+                "source_search_policy_effective": metadata.get("search_policy_effective"),
+                "search_policy_effective": "waypoint" if planner.global_planner is not None or obstacles else "active_mpc",
+                "recovery_route_planner": "global_astar" if planner.global_planner is not None else "legacy",
                 "source_episode_json": str(source_episode_json),
                 "source_checkpoint": str(checkpoint),
                 "source_policy_step": int(state["step"]),

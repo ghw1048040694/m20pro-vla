@@ -114,11 +114,12 @@
     "obstacle_contact_tolerance_steps": 10
   },
   "recovery_collection": {
-    "episode_ids": "6042,6045,6048",
+    "episodes_dir": ".runtime/datasets/m20_s2_v8_visible_approach_v1",
+    "episode_ids": "12001,12002,12003,12005,12006,12011,12013,12014,12015,12016,12018,12019,12021,12022,12023",
     "write_videos": false,
     "recovery_max_episodes": 2,
-    "recovery_max_steps": 1100,
-    "progress_interval": 0
+    "recovery_max_steps": 1400,
+    "progress_interval": 100
   },
   "offline_acceptance": {
     "min_validation_episodes": 6,
