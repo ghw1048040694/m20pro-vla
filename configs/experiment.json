@@ -3,7 +3,7 @@
   "experiment_id": "m20_s2_v8_bodygyro_onpolicy_recovery_v1",
   "stage": "simulation_hidden_search_to_shadow_candidate",
   "paths": {
-    "raw_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
+    "raw_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_base_deduplicated",
     "dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
     "checkpoint_dir": ".runtime/checkpoints/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
     "init_checkpoint": ".runtime/checkpoints/m20_standard_v1_balanced_v7/best.pt",
