@@ -1,20 +1,20 @@
 {
   "schema": "m20pro_vla_experiment_v1",
-  "experiment_id": "m20_s2_v8_far_approach_bodygyro_v1",
+  "experiment_id": "m20_s2_v8_bodygyro_onpolicy_recovery_v1",
   "stage": "simulation_hidden_search_to_shadow_candidate",
   "paths": {
-    "raw_dataset": ".runtime/datasets/m20_s2_v8_far_approach_bodygyro_v1",
-    "dataset": ".runtime/datasets/m20_s2_v8_far_approach_bodygyro_v1_curated",
-    "checkpoint_dir": ".runtime/checkpoints/m20_s2_v8_far_approach_bodygyro_v1",
+    "raw_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
+    "dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
+    "checkpoint_dir": ".runtime/checkpoints/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
     "init_checkpoint": ".runtime/checkpoints/m20_standard_v1_balanced_v7/best.pt",
-    "eval_dir": ".runtime/eval/m20_s2_v8_far_approach_bodygyro_v1",
-    "collection_videos": ".runtime/videos/m20_s2_v8_far_approach_bodygyro_v1",
-    "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_far_approach_bodygyro_v1_curated",
-    "smolvla_prepared_base": ".runtime/cache/smolvla_m20_s2_v8_far_approach_bodygyro_v1_from_recovery_5000",
+    "eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
+    "collection_videos": ".runtime/videos/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
+    "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
+    "smolvla_prepared_base": ".runtime/cache/m20_s2_v8_bodygyro_onpolicy_recovery_v1_from_far_10000",
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000",
-    "recovery_dataset": ".runtime/datasets/m20_s2_v8_visible_approach_v1_recovery",
-    "recovery_eval_dir": ".runtime/eval/m20_s2_v8_visible_approach_v1_recovery_approach_margin_v1"
+    "smolvla_eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1_candidate",
+    "recovery_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_new_corrections",
+    "recovery_eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1_training_sources"
   },
   "collection": {
     "mode": "search",
@@ -81,7 +81,7 @@
   "smolvla": {
     "conda_env": "lerobot",
     "base_model": "lerobot/smolvla_base",
-    "repo_id": "m20pro/m20_s2_v8_far_approach_bodygyro_v1_curated",
+    "repo_id": "m20pro/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
     "source_fps": 50,
     "frame_stride": 2,
     "terminal_stop_repeat": 8,
@@ -96,10 +96,9 @@
     "seed": 20260918,
     "use_amp": false,
     "use_peft": false,
-    "init_policy": ".runtime/checkpoints/smolvla_m20_s2_v8_recovery_approach_v1_steps5000/checkpoints/005000/pretrained_model",
+    "init_policy": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000/checkpoints/010000/pretrained_model",
     "offline": true,
-    "recovery_terminal_stop_repeat": 1,
-    "resume_checkpoint": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000/checkpoints/002500"
+    "recovery_terminal_stop_repeat": 1
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s2_room_v5",
@@ -118,11 +117,11 @@
     "obstacle_contact_tolerance_steps": 10
   },
   "recovery_collection": {
-    "episodes_dir": ".runtime/datasets/m20_s2_v8_visible_approach_v1",
-    "episode_ids": "12001,12002,12003,12005,12006,12011,12013,12014,12015,12016,12018,12019,12021,12022,12023",
+    "episodes_dir": ".runtime/datasets/m20_s2_v8_far_approach_bodygyro_v1",
+    "episode_ids": "12001,12002,12003,12005,12006,12011,12013,12014,12015,12016,12018,12019,12021,12022,12023,15001,15003,15005,15006,15008,15010,15011,15015,15016,15017,15018,15022,15027,15028,15029,15030,15031,15033,15036,15038,15039,15040,15041,15042,15043,15046,15047,15051,15054,15055,15058,15059,15060,15061,15062,15066,15067,15068,15070,15071",
     "write_videos": false,
-    "recovery_max_episodes": 2,
-    "recovery_max_steps": 1400,
+    "recovery_max_episodes": 3,
+    "recovery_max_steps": 1800,
     "progress_interval": 100
   },
   "offline_acceptance": {

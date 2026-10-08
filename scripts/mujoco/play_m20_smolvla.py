@@ -382,8 +382,12 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
     recovery_active_steps = 0
     forward_blocked_steps = 0
     recovery_states: list[dict] = []
+    # Diagnostic labels stay outside the policy observation and training data.
+    # Keep observation-time and post-action quantities distinct for stop timing.
+    trace_rows: list[dict] = []
     try:
         for step in range(policy_step_budget):
+            observation_xy = np.asarray(data.qpos[:2]).copy()
             if args.recovery_output_dir is not None and step % 25 == 0 and not controller.safety_recovery_active:
                 w, x, y, z = (float(value) for value in data.qpos[3:7])
                 roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
@@ -459,6 +463,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             )
             front_lidar = float(np.min(lidar[32:41]))
             minimum_front_lidar = min(minimum_front_lidar, front_lidar)
+            shield_reason = "none"
             if args.safety_shield:
                 command, shield_reason = lidar_safety_shield(
                     command,
@@ -508,6 +513,21 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 target_first_visible_step = step
             if distance <= args.success_radius and target_reached_step < 0:
                 target_reached_step = step
+
+            trace_rows.append({
+                "step": step,
+                "observation_xy": observation_xy,
+                "observation_target_distance": float(np.linalg.norm(observation_xy - target_xy)),
+                "observation_target_pixels": int(visible_pixels),
+                "observation_last_confident_step": int(target_last_confident_step),
+                "stop_votes": int(stop_votes),
+                "stop_latched": bool(stop_latched),
+                "shield_reason": shield_reason,
+                "front_lidar": front_lidar,
+                "post_action_xy": np.asarray(data.qpos[:2]).copy(),
+                "post_action_target_distance": distance,
+                "post_action_obstacle_contact": bool(contacts),
+            })
 
             if front_writer is not None:
                 front_writer.stdin.write(front.tobytes())
@@ -647,6 +667,16 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         "front_video": "" if args.front_output is None else str(args.front_output),
         "rear_video": "" if args.rear_output is None else str(args.rear_output),
     }
+    metrics_path = args.metrics or args.output.with_suffix(".json")
+    trace_path = metrics_path.with_suffix(".trace.npz")
+    np.savez_compressed(
+        trace_path,
+        raw_action=np.asarray(raw_actions),
+        executed_action=np.asarray(executed_actions),
+        **{key: np.asarray([row[key] for row in trace_rows]) for key in trace_rows[0]},
+    )
+    report["diagnostic_trace"] = str(trace_path)
+    report["diagnostic_trace_schema"] = "m20pro_smolvla_timed_trace_v1"
     if args.recovery_output_dir is not None and not report["success"]:
         report["recovery_episodes"] = collect_continuations(
             model=model,
@@ -660,7 +690,6 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             max_steps=args.recovery_max_steps,
             success_radius=args.success_radius,
         )
-    metrics_path = args.metrics or args.output.with_suffix(".json")
     metrics_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
 
