@@ -33,6 +33,7 @@ from m20pro_vla.sim.mujoco import (
 from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
 from m20pro_vla.data.visibility import target_pixel_count
 from m20pro_vla.planning.room_search import RoomSearchSchedule
+from m20pro_vla.planning.room_route import RoomSearchRoutePlanner
 from m20pro_vla.planning import (
     GlobalPlanner,
     GlobalPlannerConfig,
@@ -66,9 +67,11 @@ def _update_search_stop_tail(previous: int, command: np.ndarray) -> int:
 def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global_planner, mode):
     """Apply phase-specific center arrival even when its coordinates stay fixed."""
     stop_distance = 0.20 if mode == 'handoff' else 0.65
+    planner_type = RoomSearchRoutePlanner if mode in ('explore', 'handoff') else SearchMPCPlanner
     if (not np.array_equal(planner.target_xy, goal_xy)
-            or planner.config.stop_distance != stop_distance):
-        return SearchMPCPlanner(model, goal_xy, obstacles,
+            or planner.config.stop_distance != stop_distance
+            or type(planner) is not planner_type):
+        return planner_type(model, goal_xy, obstacles,
             SearchMPCConfig(use_route_planner_when_obstacles=True, stop_distance=stop_distance),
             global_planner=global_planner)
     return planner

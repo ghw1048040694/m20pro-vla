@@ -97,3 +97,11 @@ maneuver addresses door-frame drift observed during a long in-place turn;
 physical collection must verify it. The default remains `direct`.
 Separate teacher traces and the three discovery RGB frames are diagnostic
 sidecars, including for rejected episodes, and never become policy features.
+
+During observation-teacher exploration and interior handoff, refreshed routes
+preserve completed waypoint progress only if the remaining path is identical,
+all repeated prefix points were already passed, and the robot remains within
+the original path-deviation limit. New detours and off-path recovery reset
+progress normally. Target routing retains the base planner. Replanning cadence,
+waypoint radius, task arrival and safety thresholds are unchanged. CPU routing
+regressions do not establish physical tour coverage or learner performance.
