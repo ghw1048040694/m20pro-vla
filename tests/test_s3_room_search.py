@@ -41,5 +41,13 @@ class RoomSearchTests(unittest.TestCase):
         for value in (-1,float('nan'),float('inf')):
             with self.assertRaises(ValueError): schedule.advance((0.,0.),0.,value)
 
+    def test_heading_jitter_cannot_finish_a_camera_sweep(self):
+        schedule=RoomSearchSchedule(self.centers,sweep_radians=0.3)
+        schedule.advance(self.centers[0],0.,0)
+        for _ in range(30):
+            for yaw in (0.05,-0.05):
+                self.assertEqual(schedule.advance(self.centers[0],yaw,0)['mode'],'scan')
+        self.assertEqual(schedule.completed_room_scans,0)
+
 
 if __name__=='__main__': unittest.main()

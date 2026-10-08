@@ -47,7 +47,7 @@ class RoomSearchSchedule:
             delta = (yaw - self.scan_yaw + math.pi) % (2 * math.pi) - math.pi
             # Large pose jumps cannot masquerade as camera coverage.
             if abs(delta) <= 0.2:
-                self.swept += abs(delta)
+                self.swept = max(0.0, self.swept + delta)
         self.scan_yaw = yaw
         if self.swept >= self.sweep_radians:
             self.completed_room_scans += 1
