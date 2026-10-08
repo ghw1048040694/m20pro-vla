@@ -77,5 +77,29 @@ class S3RoomPermutationTests(unittest.TestCase):
         with self.assertRaises(ValueError):ns['_validate_structured_scene_args'](args)
 
 
+    def test_same_room_center_handoff_changes_real_planner_stop_distance(self):
+        from types import SimpleNamespace
+        from m20pro_vla.planning import SearchMPCPlanner, SearchMPCConfig
+        ns = runpy.run_path(str(Path(__file__).parents[1] / 'scripts/mujoco/collect_m20_mujoco_vla.py'))
+        center = np.asarray([0., 0.]); grid = GlobalPlanner(())
+        old = SearchMPCPlanner(None, center, (), SearchMPCConfig(stop_distance=.65), global_planner=grid)
+        data = SimpleNamespace(qpos=np.array([.5, 0., .57, 0., 0., 0., 1.]))
+        old_action, _ = old._global_route_recommend(data)
+        self.assertEqual(old_action[3], 1.)
+        new = ns['_room_search_planner_for_decision'](old, None, center, (), grid, 'handoff')
+        self.assertIsNot(new, old)
+        self.assertEqual(new.config.stop_distance, .20)
+        action, _ = new._global_route_recommend(data)
+        self.assertGreater(action[0], 0.)
+        self.assertEqual(action[3], 0.)
+        self.assertIs(ns['_room_search_planner_for_decision'](new,None,center,(),grid,'handoff'),new)
+        # A phase change must restore the original target radius even at the same coordinates.
+        target = ns['_room_search_planner_for_decision'](new,None,center,(),grid,'target')
+        self.assertEqual(target.config.stop_distance, .65)
+        self.assertIs(ns['_room_search_planner_for_decision'](target,None,center,(),grid,'target'),target)
+        changed = ns['_room_search_planner_for_decision'](target,None,np.array([1.,0.]),(),grid,'target')
+        np.testing.assert_array_equal(changed.target_xy, [1.,0.])
+
+
 if __name__ == '__main__':
     unittest.main()

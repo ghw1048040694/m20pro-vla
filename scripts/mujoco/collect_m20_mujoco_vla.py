@@ -63,6 +63,17 @@ def _update_search_stop_tail(previous: int, command: np.ndarray) -> int:
     return previous + 1 if stopped else 0
 
 
+def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global_planner, mode):
+    """Apply phase-specific center arrival even when its coordinates stay fixed."""
+    stop_distance = 0.20 if mode == 'handoff' else 0.65
+    if (not np.array_equal(planner.target_xy, goal_xy)
+            or planner.config.stop_distance != stop_distance):
+        return SearchMPCPlanner(model, goal_xy, obstacles,
+            SearchMPCConfig(use_route_planner_when_obstacles=True, stop_distance=stop_distance),
+            global_planner=global_planner)
+    return planner
+
+
 SEARCH_LAYOUT_TEMPLATES = (
     np.array(((3.50, 0.24), (3.40, 0.34), (3.90, -0.36)), dtype=np.float64),
     np.array(((3.20, 0.32), (3.50, 0.28), (3.80, -0.40)), dtype=np.float64),
@@ -1554,11 +1565,9 @@ def main() -> None:
                         if search_decision['mode'] != 'scan':
                             planning_goal = (plan.target_xy if search_decision['mode'] == 'target'
                                              else np.asarray(search_decision['goal_xy'], dtype=np.float64))
-                            if not np.array_equal(search_planner.target_xy, planning_goal):
-                                search_planner = SearchMPCPlanner(model, planning_goal, plan.obstacles,
-                                    SearchMPCConfig(use_route_planner_when_obstacles=True,
-                                        stop_distance=(0.20 if search_decision['mode'] == 'handoff' else 0.65)),
-                                    global_planner=global_planner)
+                            search_planner = _room_search_planner_for_decision(
+                                search_planner, model, planning_goal, plan.obstacles,
+                                global_planner, search_decision['mode'])
                     goal_observed = room_search is None or room_search.discovered
                     if goal_observed and distance <= curriculum_success_radius and reached_step < 0:
                         reached_step = max(0, step - args.warmup_steps)
