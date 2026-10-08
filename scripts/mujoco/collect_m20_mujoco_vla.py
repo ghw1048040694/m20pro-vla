@@ -32,6 +32,7 @@ from m20pro_vla.sim.mujoco import (
 )
 from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
 from m20pro_vla.data.visibility import target_pixel_count
+from m20pro_vla.planning.room_search import RoomSearchSchedule
 from m20pro_vla.planning import (
     GlobalPlanner,
     GlobalPlannerConfig,
@@ -271,6 +272,10 @@ def parse_args() -> argparse.Namespace:
         "--s3-room-assignment", choices=("canonical", "balanced-permutations"), default="canonical",
         help="Sampled S3 only: cycle all six object-to-room assignments by absolute layout ID.",
     )
+    parser.add_argument(
+        "--s3-search-teacher", choices=("privileged-target", "observe-then-route"), default="privileged-target",
+        help="S3 expert only: explore rooms until onboard RGB finds the task target, then route to it.",
+    )
     parser.add_argument("--episodes", type=int, default=24)
     parser.add_argument(
         "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
@@ -450,6 +455,7 @@ class EpisodePlan:
     scene_kind: str = "s1"
     scene_name: str = ""
     room_object_assignment: tuple[tuple[str, str], ...] = ()
+    search_room_centers: tuple[tuple[float, float], ...] = ()
 
 
 def _wrap_angle(angle: float) -> float:
@@ -638,6 +644,7 @@ def _s3_assignment_provenance(args: argparse.Namespace, plan: "EpisodePlan") -> 
         return {}
     return {
         "s3_room_assignment_mode": getattr(args, "s3_room_assignment", "canonical"),
+        "s3_search_teacher_mode": getattr(args, "s3_search_teacher", "privileged-target"),
         "room_object_assignment_privileged_metadata_only": dict(plan.room_object_assignment),
     }
 
@@ -1140,6 +1147,8 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
                     scene_name=str(episode.spec.name),
                     room_object_assignment=(tuple((wing.name, wing.object_name) for wing in episode.spec.rooms)
                                             if args.scene == "s3" else ()),
+                    search_room_centers=(tuple(wing.interior_center for wing in episode.spec.rooms)
+                                         if args.scene == "s3" else ()),
                 )
             )
     return plans
@@ -1158,6 +1167,9 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
     assignment = getattr(args, "s3_room_assignment", "canonical")
     if assignment != "canonical" and (args.scene != "s3" or args.scene_episode != "sampled"):
         raise ValueError("--s3-room-assignment balanced-permutations requires sampled --scene s3")
+    if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route":
+        if args.scene != "s3" or getattr(args, "metadata_only", False):
+            raise ValueError("--s3-search-teacher observe-then-route requires --scene s3 and real RGB arrays")
     visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
     if visible_approach and args.scene != "s2":
         raise ValueError("--structured-start-mode visible-approach requires --scene s2")
@@ -1445,6 +1457,10 @@ def main() -> None:
             if args.mode == "search"
             else None
         )
+        room_search = (RoomSearchSchedule(plan.search_room_centers)
+                       if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route" else None)
+        rgb_discovery_step = -1
+        explored_room_scans = 0
         renderer = mujoco.Renderer(model, height=args.policy_height, width=args.policy_width) if collect_arrays else None
         demo_renderer = (
             mujoco.Renderer(model, height=args.video_height, width=args.video_width)
@@ -1506,14 +1522,41 @@ def main() -> None:
                     delta = plan.target_xy - base_xy
                     distance = float(np.linalg.norm(delta))
                     bearing = _wrap_angle(math.atan2(float(delta[1]), float(delta[0])) - base_yaw)
-                    if distance <= curriculum_success_radius and reached_step < 0:
+                    search_decision = None
+                    observed_front = observed_rear = None
+                    if room_search is not None:
+                        assert renderer is not None
+                        renderer.update_scene(data, camera="front_rgb")
+                        observed_front = renderer.render().copy()
+                        renderer.update_scene(data, camera="rear_rgb")
+                        observed_rear = renderer.render().copy()
+                        observed_pixels = (target_pixel_count(observed_front, plan.target_label)
+                                           + target_pixel_count(observed_rear, plan.target_label))
+                        search_decision = room_search.advance(base_xy, base_yaw, observed_pixels)
+                        if room_search.discovered and rgb_discovery_step < 0:
+                            rgb_discovery_step = step - args.warmup_steps
+                        explored_room_scans = room_search.completed_room_scans
+                        if search_decision['mode'] != 'scan':
+                            planning_goal = (plan.target_xy if room_search.discovered
+                                             else np.asarray(search_decision['goal_xy'], dtype=np.float64))
+                            if not np.array_equal(search_planner.target_xy, planning_goal):
+                                search_planner = SearchMPCPlanner(model, planning_goal, plan.obstacles,
+                                    SearchMPCConfig(use_route_planner_when_obstacles=True), global_planner=global_planner)
+                    goal_observed = room_search is None or room_search.discovered
+                    if goal_observed and distance <= curriculum_success_radius and reached_step < 0:
                         reached_step = max(0, step - args.warmup_steps)
                     if distance <= canonical_success_radius and canonical_reached_step < 0:
                         canonical_reached_step = max(0, step - args.warmup_steps)
-                    if distance <= curriculum_success_radius:
+                    if goal_observed and distance <= curriculum_success_radius:
                         expert = np.array((0.0, 0.0, 0.0, 1.0), dtype=np.float64)
+                    elif search_decision is not None and search_decision['mode'] == 'scan':
+                        expert = np.array((0.0, 0.0, 0.15, 0.0), dtype=np.float64)
+                        planner_info = {'room_search_mode': 'scan', 'room_search_index': room_search.room_index}
                     elif args.mode == "search":
                         expert, planner_info = search_planner.recommend(data, controller)
+                        if room_search is not None:
+                            planner_info.update(room_search_mode=search_decision['mode'],
+                                                room_search_index=room_search.room_index)
                     else:
                         # The first stable bridge keeps the target initially in
                         # front. A small heading label is retained for the VLA
@@ -1553,10 +1596,14 @@ def main() -> None:
                         # physical state. This is essential for closed-loop BC.
                         index = collected_steps
                         assert renderer is not None and front is not None and rear is not None and lidar is not None and proprio is not None and action is not None
-                        renderer.update_scene(data, camera="front_rgb")
-                        front[index] = renderer.render().copy()
-                        renderer.update_scene(data, camera="rear_rgb")
-                        rear[index] = renderer.render().copy()
+                        if room_search is None:
+                            renderer.update_scene(data, camera="front_rgb")
+                            front[index] = renderer.render().copy()
+                            renderer.update_scene(data, camera="rear_rgb")
+                            rear[index] = renderer.render().copy()
+                        else:
+                            front[index] = observed_front
+                            rear[index] = observed_rear
                         if index == 0:
                             initial_target_pixels = target_pixel_count(front[index], plan.target_label) + target_pixel_count(rear[index], plan.target_label)
                         lidar[index] = planar_lidar(model, data)
@@ -1749,6 +1796,12 @@ def main() -> None:
             ),
             "min_obstacle_clearance": min_obstacle_clearance,
             "planner": planner_info if args.mode == "search" else {},
+            **({'teacher_rgb_discovery_step': rgb_discovery_step,
+                'teacher_completed_room_scans': explored_room_scans,
+                'teacher_pre_discovery_goal_source': 'fixed_room_geometry_tour',
+                'teacher_discovery_min_pixels': room_search.min_pixels,
+                'teacher_discovery_confirmation_observations': room_search.confirmation_observations}
+               if room_search is not None else {}),
             "video": str(video_path) if args.video else "",
             "video_view": args.video_view if args.video else "",
             "video_resolution": {"width": int(video_width), "height": int(video_height)},

@@ -74,3 +74,16 @@ and existing declared evaluation layouts retain their historical mapping.
 Room ownership is saved as privileged provenance in JSON only, never as a
 policy input or array training feature. Review accepted trajectories and room
 balance after physical collection; geometric reachability alone is insufficient.
+
+`collection.s3_search_teacher: observe-then-route` is an opt-in expert schedule
+for S3 training collection. Until three consecutive onboard RGB observations
+contain at least five task-colour pixels, it visits room centers in a fixed
+geometry-only order and scans using the front/rear cameras. After discovery it
+keeps that evidence through occlusion and uses the existing privileged expert
+planner to approach the target. This prevents hidden object assignments from
+choosing the pre-discovery route. It is not a learner execution gate or new
+policy input. It requires actual RGB capture and rejects metadata-only collection.
+The legacy `privileged-target` mode remains for historical physical baselines;
+do not treat its hidden-target route labels as observation-grounded search data.
+Room tours need a separately reviewed collection budget. CPU schedule/interface
+tests do not establish real physical success, camera coverage, or learner memory.

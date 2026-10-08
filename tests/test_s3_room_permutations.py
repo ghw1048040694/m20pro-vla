@@ -59,6 +59,15 @@ class S3RoomPermutationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ns['_validate_structured_scene_args'](args)
 
+    def test_observation_teacher_rejects_metadata_only_and_non_s3(self):
+        ns = runpy.run_path(str(Path(__file__).parents[1] / 'scripts/mujoco/collect_m20_mujoco_vla.py'))
+        args=argparse.Namespace(scene='s3', scene_episode='sampled', mode='search',steps=8000,
+                                s3_search_teacher='observe-then-route',metadata_only=False)
+        self.assertTrue(ns['_validate_structured_scene_args'](args))
+        for scene,metadata in (('s2',False),('s3',True)):
+            args.scene,args.metadata_only=scene,metadata
+            with self.assertRaises(ValueError): ns['_validate_structured_scene_args'](args)
+
 
 if __name__ == '__main__':
     unittest.main()
