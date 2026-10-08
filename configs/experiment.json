@@ -121,7 +121,8 @@
     "write_videos": false,
     "recovery_max_episodes": 3,
     "recovery_max_steps": 1800,
-    "progress_interval": 100
+    "progress_interval": 100,
+    "episode_ids": ""
   },
   "offline_acceptance": {
     "min_validation_episodes": 6,
