@@ -27,3 +27,11 @@ actual action/state/task rows. Cached subset views reference unchanged video
 files but expose only the selected training rows/timestamps; merging stream-copies
 video without re-encoding. Reports include reused/new episode counts and actual
 episode order. Partial work never replaces an existing training dataset.
+# Raw reader prototype
+
+`data.raw_dataset.RawM20Dataset` is an experimental CPU reader, not an enabled
+training backend. It prepares strided RGB arrays once without video encoding,
+uses content-verified immutable caches and bounded per-worker memory mappings,
+and preserves stop sampling, state projection and episode-local action padding.
+Its raw pixels differ from lossy H264 decoding. Full-dataset sustained memory and
+throughput checks and official training integration are required before activation.
