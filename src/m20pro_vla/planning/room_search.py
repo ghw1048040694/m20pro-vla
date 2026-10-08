@@ -26,6 +26,7 @@ class RoomSearchSchedule:
     handoff_radius: float = 0.25
     handoff_room_index: int | None = None
     handoff_complete: bool = False
+    scan_start_radius: float | None = None
 
     def __post_init__(self):
         if not self.room_centers or not all(math.isfinite(v) for p in self.room_centers for v in p):
@@ -34,6 +35,9 @@ class RoomSearchSchedule:
             raise ValueError('Positive search settings are required')
         if not math.isfinite(self.handoff_radius) or self.handoff_radius <= 0:
             raise ValueError('Positive finite handoff radius required')
+        if self.scan_start_radius is not None and (not math.isfinite(self.scan_start_radius)
+                or not 0 < self.scan_start_radius <= self.arrival_radius):
+            raise ValueError('Scan start radius must be positive and within the scan area')
         if self.safe_handoff_bounds:
             if len(self.safe_handoff_bounds) != len(self.room_centers):
                 raise ValueError('Room bounds must match centers')
@@ -72,6 +76,12 @@ class RoomSearchSchedule:
         if math.dist(xy, center) > self.arrival_radius:
             self.scan_yaw = None
             self.swept = 0.0
+            return dict(mode='explore', goal_xy=center, room_index=self.room_index)
+        if (self.scan_yaw is None and self.scan_start_radius is not None
+                and math.dist(xy, center) > self.scan_start_radius):
+            # Enter the interior anchor before starting a skid turn. Once
+            # started, retain the original outer scan-area limit so normal
+            # turn drift does not repeatedly erase measured camera coverage.
             return dict(mode='explore', goal_xy=center, room_index=self.room_index)
         if self.scan_yaw is not None:
             delta = (yaw - self.scan_yaw + math.pi) % (2 * math.pi) - math.pi
