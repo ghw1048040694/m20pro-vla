@@ -168,3 +168,5 @@ MUJOCO_GL=egl python scripts/mujoco/preview_m20_corridor.py
 ## 关键词
 
 `Embodied AI` · `VLA` · `ObjectNav` · `SmolVLA` · `Action Chunk` · `World Model` · `MPC` · `MuJoCo` · `LiDAR` · `Legged-Wheeled Robot` · `Sim2Sim`
+
+S3 observation-teacher collection can opt into `--s3-scan-anchor interior-center` through `collection.s3_scan_anchor` in the existing experiment config. This pairs a .25 m scan entry anchor with the .20 m center-route stopping distance; scan continuation still uses the .75 m area and measured net yaw. The default `legacy` preserves prior collection behavior. This teacher option does not change learned-policy execution or task acceptance.

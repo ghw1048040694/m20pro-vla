@@ -1,14 +1,14 @@
 {
   "schema": "m20pro_vla_experiment_v1",
-  "experiment_id": "m20_s3_v8_multiroom_phase_handoff_pilot_v1",
-  "stage": "s3_handoff_phase_fix_physical_pilot",
+  "experiment_id": "m20_s3_v8_multiroom_integrated_scan_pilot_v1",
+  "stage": "s3_integrated_scan_target_present_physical_pilot",
   "paths": {
-    "raw_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_phase_handoff_pilot",
+    "raw_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_integrated_scan_pilot",
     "dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_curated",
     "checkpoint_dir": ".runtime/checkpoints/m20_s3_v8_multiroom_v1",
     "init_checkpoint": ".runtime/checkpoints/m20_standard_v1_balanced_v7/best.pt",
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
-    "collection_videos": ".runtime/videos/m20_s3_v8_multiroom_v1_phase_handoff_pilot",
+    "collection_videos": ".runtime/videos/m20_s3_v8_multiroom_v1_integrated_scan_pilot",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s3_v8_multiroom_v1_from_train23",
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000",
@@ -45,7 +45,8 @@
     "skip_existing": true,
     "s3_room_assignment": "balanced-permutations",
     "s3_search_teacher": "observe-then-route",
-    "s3_discovery_handoff": "interior-center"
+    "s3_discovery_handoff": "interior-center",
+    "s3_scan_anchor": "interior-center"
   },
   "environment": {
     "require_wsl2": true,

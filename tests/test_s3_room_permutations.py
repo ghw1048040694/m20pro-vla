@@ -100,6 +100,40 @@ class S3RoomPermutationTests(unittest.TestCase):
         changed = ns['_room_search_planner_for_decision'](target,None,np.array([1.,0.]),(),grid,'target')
         np.testing.assert_array_equal(changed.target_xy, [1.,0.])
 
+    def test_interior_scan_anchor_connects_unified_config_to_real_center_motion(self):
+        from types import SimpleNamespace
+        from m20pro_vla.runtime.experiment import experiment_stage_args
+        from m20pro_vla.planning import SearchMPCPlanner, SearchMPCConfig
+        ns = runpy.run_path(str(Path(__file__).parents[1] / 'scripts/mujoco/collect_m20_mujoco_vla.py'))
+        config = dict(collection=dict(scene='s3',scene_episode='sampled',mode='search',steps=18000,
+            s3_search_teacher='observe-then-route',s3_discovery_handoff='interior-center',s3_scan_anchor='interior-center'),
+            paths=dict(dataset='unused',raw_dataset='unused'))
+        import sys
+        original=sys.argv
+        try:
+            sys.argv=['collect',*experiment_stage_args(config,'collect')]; args=ns['parse_args']()
+        finally:sys.argv=original
+        self.assertTrue(ns['_validate_structured_scene_args'](args))
+        plan=SimpleNamespace(search_room_centers=((0.,0.),),search_room_bounds=((-2.,2.,-2.,2.),))
+        schedule=ns['_room_search_schedule_for_plan'](args,plan)
+        self.assertEqual(schedule.scan_start_radius,.25)
+        decision=schedule.advance((.5,0.),0.,0)
+        self.assertEqual(decision['mode'],'explore')
+        grid=GlobalPlanner(())
+        old=SearchMPCPlanner(None,np.zeros(2),(),SearchMPCConfig(stop_distance=.65),global_planner=grid)
+        new=ns['_room_search_planner_for_decision'](old,None,np.zeros(2),(),grid,decision['mode'],schedule.scan_start_radius)
+        action,_=new._global_route_recommend(SimpleNamespace(qpos=np.array([.5,0.,.57,0.,0.,0.,1.])))
+        self.assertEqual(new.config.stop_distance,.20)
+        self.assertGreater(action[0],0.)
+        self.assertEqual(action[3],0.)
+        self.assertIs(ns['_room_search_planner_for_decision'](new,None,np.zeros(2),(),grid,'explore',.25),new)
+        self.assertEqual(schedule.advance((.24,0.),0.,0)['mode'],'scan')
+        target=ns['_room_search_planner_for_decision'](new,None,np.zeros(2),(),grid,'target',.25)
+        self.assertEqual(target.config.stop_distance,.65)
+        args.s3_scan_anchor='legacy';self.assertIsNone(ns['_room_search_schedule_for_plan'](args,plan).scan_start_radius)
+        args.s3_scan_anchor='interior-center';args.s3_search_teacher='privileged-target'
+        with self.assertRaises(ValueError):ns['_validate_structured_scene_args'](args)
+
 
 if __name__ == '__main__':
     unittest.main()

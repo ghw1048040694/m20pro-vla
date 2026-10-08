@@ -64,9 +64,9 @@ def _update_search_stop_tail(previous: int, command: np.ndarray) -> int:
     return previous + 1 if stopped else 0
 
 
-def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global_planner, mode):
+def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global_planner, mode, scan_start_radius=None):
     """Apply phase-specific center arrival even when its coordinates stay fixed."""
-    stop_distance = 0.20 if mode == 'handoff' else 0.65
+    stop_distance = 0.20 if (mode == 'handoff' or (mode == 'explore' and scan_start_radius is not None)) else 0.65
     planner_type = RoomSearchRoutePlanner if mode in ('explore', 'handoff') else SearchMPCPlanner
     if (not np.array_equal(planner.target_xy, goal_xy)
             or planner.config.stop_distance != stop_distance
@@ -75,6 +75,15 @@ def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global
             SearchMPCConfig(use_route_planner_when_obstacles=True, stop_distance=stop_distance),
             global_planner=global_planner)
     return planner
+
+
+def _room_search_schedule_for_plan(args, plan):
+    if getattr(args, 's3_search_teacher', 'privileged-target') != 'observe-then-route':
+        return None
+    return RoomSearchSchedule(plan.search_room_centers,
+        safe_handoff_bounds=(plan.search_room_bounds
+            if getattr(args, 's3_discovery_handoff', 'direct') == 'interior-center' else ()),
+        scan_start_radius=(.25 if getattr(args, 's3_scan_anchor', 'legacy') == 'interior-center' else None))
 
 
 SEARCH_LAYOUT_TEMPLATES = (
@@ -293,6 +302,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--s3-discovery-handoff", choices=("direct", "interior-center"), default="direct",
         help="Observation teacher only: complete room entry before turning toward a discovered target.",
+    )
+    parser.add_argument(
+        "--s3-scan-anchor", choices=("legacy", "interior-center"), default="legacy",
+        help="Observation teacher only: enter the room center within .25 m before starting a scan.",
     )
     parser.add_argument("--episodes", type=int, default=24)
     parser.add_argument(
@@ -665,6 +678,7 @@ def _s3_assignment_provenance(args: argparse.Namespace, plan: "EpisodePlan") -> 
         "s3_room_assignment_mode": getattr(args, "s3_room_assignment", "canonical"),
         "s3_search_teacher_mode": getattr(args, "s3_search_teacher", "privileged-target"),
         "s3_discovery_handoff_mode": getattr(args, "s3_discovery_handoff", "direct"),
+        "s3_scan_anchor_mode": getattr(args, "s3_scan_anchor", "legacy"),
         "room_object_assignment_privileged_metadata_only": dict(plan.room_object_assignment),
     }
 
@@ -1196,6 +1210,10 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
         args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
     ):
         raise ValueError("Interior-center handoff requires the S3 observation teacher")
+    if getattr(args, "s3_scan_anchor", "legacy") != "legacy" and (
+        args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
+    ):
+        raise ValueError("Interior scan anchor requires the S3 observation teacher")
     visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
     if visible_approach and args.scene != "s2":
         raise ValueError("--structured-start-mode visible-approach requires --scene s2")
@@ -1483,10 +1501,7 @@ def main() -> None:
             if args.mode == "search"
             else None
         )
-        room_search = (RoomSearchSchedule(plan.search_room_centers,
-                           safe_handoff_bounds=(plan.search_room_bounds
-                               if getattr(args, 's3_discovery_handoff', 'direct') == 'interior-center' else ()))
-                       if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route" else None)
+        room_search = _room_search_schedule_for_plan(args, plan)
         rgb_discovery_step = -1
         explored_room_scans = 0
         teacher_trace = []  # Diagnostic sidecar only; never part of policy observations.
@@ -1570,7 +1585,8 @@ def main() -> None:
                                              else np.asarray(search_decision['goal_xy'], dtype=np.float64))
                             search_planner = _room_search_planner_for_decision(
                                 search_planner, model, planning_goal, plan.obstacles,
-                                global_planner, search_decision['mode'])
+                                global_planner, search_decision['mode'],
+                                scan_start_radius=room_search.scan_start_radius)
                     goal_observed = room_search is None or room_search.discovered
                     if goal_observed and distance <= curriculum_success_radius and reached_step < 0:
                         reached_step = max(0, step - args.warmup_steps)
