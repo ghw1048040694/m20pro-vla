@@ -37,6 +37,7 @@ from m20pro_vla.eval.acceptance import (
     resolve_policy_step_budget,
     terminate_after_stop,
 )
+from m20pro_vla.eval.stop_confirmation import ActionQueueFreshener, StopConfirmation
 from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
 from m20pro_vla.low_level.shield import (
     DEFAULT_SAFETY_STOP_DISTANCE_M,
@@ -156,6 +157,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--stop-threshold", type=float, default=0.5)
     parser.add_argument("--stop-confirm", type=int, default=3)
+    parser.add_argument(
+        "--fresh-stop-confirmation", action=argparse.BooleanOptionalAction, default=None,
+        help="Confirm model stops with separate fresh-observation predictions; default off unless configured.",
+    )
     parser.add_argument(
         "--success-radius",
         type=float,
@@ -356,6 +361,9 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
     stop_votes = 0
     stop_latched = False
     stop_step = -1
+    fresh_stop_confirmation = bool(getattr(args, 'fresh_stop_confirmation', False))
+    action_freshener = ActionQueueFreshener(fresh_stop_confirmation)
+    stop_confirmation = StopConfirmation(required_votes=args.stop_confirm, require_fresh=fresh_stop_confirmation)
     # Steps actually simulated. Equals ``policy_step_budget`` unless the episode
     # ends early on a latched stop; logged so the size of the unattended tail the
     # old run-to-budget behaviour produced stays visible.
@@ -417,7 +425,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 target_last_confident_step = step
             lidar = planar_lidar(model, data)
             state = m20_smolvla_state(proprioception(model, data), lidar)
-            action_tensor = predict_action(
+            action_tensor, prediction_evidence = action_freshener.predict(policy, lambda: predict_action(
                 {
                     "observation.images.front": front,
                     "observation.images.rear": rear,
@@ -430,30 +438,27 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 bool(policy.config.use_amp),
                 task=str(metadata["task_text"]),
                 robot_type="m20pro",
-            )
+            ), confirming=stop_confirmation.pending)
             raw = action_tensor.detach().cpu().numpy()[0]
             desired = executable_action(raw, args.stop_threshold)
-            if stop_latched:
-                desired = np.asarray((0.0, 0.0, 0.0, 1.0), dtype=np.float64)
-            else:
-                stop_votes = stop_votes + 1 if desired[3] > 0.5 else 0
-                if desired[3] > 0.5:
-                    visual_stop_evidence = (
-                        visible_pixels >= args.visual_stop_min_pixels
-                        or (
-                            target_last_confident_step >= 0
-                            and step - target_last_confident_step <= args.visual_stop_memory_steps
-                        )
-                    )
-                    if args.visual_stop_gate and not visual_stop_evidence:
-                        visual_stop_block_count += 1
-                        stop_votes = 0
-                        desired = previous_command.copy()
-                    elif stop_votes < args.stop_confirm:
-                        desired = previous_command.copy()
-                    else:
-                        stop_latched = True
-                        stop_step = step
+            visual_stop_evidence = (
+                visible_pixels >= args.visual_stop_min_pixels
+                or (
+                    target_last_confident_step >= 0
+                    and step - target_last_confident_step <= args.visual_stop_memory_steps
+                )
+            )
+            if not stop_latched and desired[3] > .5 and args.visual_stop_gate and not visual_stop_evidence:
+                visual_stop_block_count += 1
+            desired = stop_confirmation.resolve(
+                desired, previous_command,
+                visual_evidence=not args.visual_stop_gate or visual_stop_evidence,
+                prediction_fresh=prediction_evidence.fresh,
+            )
+            stop_votes = stop_confirmation.votes
+            if stop_confirmation.latched and not stop_latched:
+                stop_step = step
+            stop_latched = stop_confirmation.latched
             command = smooth_body_command(
                 previous_command,
                 desired,
@@ -522,6 +527,11 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 "observation_last_confident_step": int(target_last_confident_step),
                 "stop_votes": int(stop_votes),
                 "stop_latched": bool(stop_latched),
+                "prediction_fresh": bool(prediction_evidence.fresh),
+                "forced_replan": bool(prediction_evidence.forced_replan),
+                "prediction_generation": int(prediction_evidence.generation),
+                "queued_actions_before": int(prediction_evidence.queued_before),
+                "stop_confirmation_pending": bool(stop_confirmation.pending),
                 "shield_reason": shield_reason,
                 "front_lidar": front_lidar,
                 "post_action_xy": np.asarray(data.qpos[:2]).copy(),
@@ -606,6 +616,8 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         "success_radius": float(args.success_radius),
         "sim_steps_per_action": int(args.sim_steps_per_action),
         "action_replan_steps": int(args.action_replan_steps),
+        "fresh_stop_confirmation": fresh_stop_confirmation,
+        "forced_stop_replan_count": sum(int(row['forced_replan']) for row in trace_rows),
         "safety_shield": bool(args.safety_shield),
         "safety_stop_distance": float(args.safety_stop_distance),
         "safety_slow_distance": float(args.safety_slow_distance),

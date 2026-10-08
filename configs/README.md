@@ -54,3 +54,13 @@ The active TRAIN23 configuration and runtime remain on the certified standard
 backend; no live experiment is switched. Use this option for a new reviewed run,
 then validate actual model training and the unchanged closed-loop acceptance
 panel, preserving prior outputs.
+
+`smolvla_evaluation.fresh_stop_confirmation` opts into independent model stop
+confirmation (default false). A queued stop candidate schedules a new prediction
+on the next observation and does not count as a vote. While confirming, only the
+remaining action queue is invalidated; observation history is preserved. Three
+fresh predictions must continue to request stopping with the existing visual
+evidence rule. A fresh movement action cancels the candidate. LiDAR emergency
+stops remain immediate and do not depend on these model votes. Traces record
+prediction generation, freshness and forced replans for verification. This is
+an execution experiment, not a change to model weights or acceptance thresholds.

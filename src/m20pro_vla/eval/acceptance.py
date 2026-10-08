@@ -47,6 +47,7 @@ CONTACT_TOLERANT_CORE_CRITERIA: tuple[str, ...] = (
 
 # (argparse attribute, acceptance-config key, cast, module fallback)
 EVALUATION_KNOBS: tuple[tuple[str, str, type, float | int], ...] = (
+    ("fresh_stop_confirmation", "fresh_stop_confirmation", bool, False),
     ("policy_steps", "policy_steps", int, DEFAULT_POLICY_STEPS),
     ("success_radius", "success_radius", float, DEFAULT_SUCCESS_RADIUS_M),
     ("safety_stop_distance", "safety_stop_distance", float, DEFAULT_SAFETY_STOP_DISTANCE_M),
@@ -99,7 +100,7 @@ def apply_evaluation_config(args: Any, config: dict | None) -> Any:
     """
     evaluation = (config or {}).get("smolvla_evaluation", {}) or {}
     for attr, key, cast, fallback in EVALUATION_KNOBS:
-        if getattr(args, attr) is None:
+        if getattr(args, attr, None) is None:
             setattr(args, attr, cast(evaluation[key]) if key in evaluation else fallback)
     return args
 
