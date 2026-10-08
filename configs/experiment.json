@@ -11,8 +11,8 @@
     "collection_videos": ".runtime/videos/m20_s2_v8_bodygyro_onpolicy_recovery_v1",
     "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s2_v8_bodygyro_onpolicy_recovery_v1_from_far_10000",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000",
-    "smolvla_eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1_candidate",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000",
     "recovery_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1_training_sources"
   },
