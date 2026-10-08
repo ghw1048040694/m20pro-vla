@@ -87,3 +87,13 @@ The legacy `privileged-target` mode remains for historical physical baselines;
 do not treat its hidden-target route labels as observation-grounded search data.
 Room tours need a separately reviewed collection budget. CPU schedule/interface
 tests do not establish real physical success, camera coverage, or learner memory.
+
+The observation teacher also accepts `collection.s3_discovery_handoff:
+interior-center`. If RGB discovery occurs while inside a room, it finishes
+entering that room before changing to the target route; corridor discovery
+keeps the direct handoff. Room geometry alone selects this temporary goal,
+and the original task arrival/stop and quality rules still apply. This opt-in
+maneuver addresses door-frame drift observed during a long in-place turn;
+physical collection must verify it. The default remains `direct`.
+Separate teacher traces and the three discovery RGB frames are diagnostic
+sidecars, including for rejected episodes, and never become policy features.

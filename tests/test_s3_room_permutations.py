@@ -68,6 +68,14 @@ class S3RoomPermutationTests(unittest.TestCase):
             args.scene,args.metadata_only=scene,metadata
             with self.assertRaises(ValueError): ns['_validate_structured_scene_args'](args)
 
+    def test_interior_handoff_requires_observation_teacher(self):
+        ns = runpy.run_path(str(Path(__file__).parents[1] / 'scripts/mujoco/collect_m20_mujoco_vla.py'))
+        args=argparse.Namespace(scene='s3',scene_episode='sampled',mode='search',steps=18000,
+            s3_search_teacher='observe-then-route',s3_discovery_handoff='interior-center',metadata_only=False)
+        self.assertTrue(ns['_validate_structured_scene_args'](args))
+        args.s3_search_teacher='privileged-target'
+        with self.assertRaises(ValueError):ns['_validate_structured_scene_args'](args)
+
 
 if __name__ == '__main__':
     unittest.main()

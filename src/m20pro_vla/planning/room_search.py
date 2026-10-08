@@ -22,22 +22,52 @@ class RoomSearchSchedule:
     scan_yaw: float | None = None
     swept: float = 0.0
     completed_room_scans: int = 0
+    safe_handoff_bounds: tuple[tuple[float, float, float, float], ...] = ()
+    handoff_radius: float = 0.25
+    handoff_room_index: int | None = None
+    handoff_complete: bool = False
 
     def __post_init__(self):
         if not self.room_centers or not all(math.isfinite(v) for p in self.room_centers for v in p):
             raise ValueError('Finite room centers are required')
         if self.arrival_radius <= 0 or self.min_pixels < 1 or self.confirmation_observations < 1:
             raise ValueError('Positive search settings are required')
+        if not math.isfinite(self.handoff_radius) or self.handoff_radius <= 0:
+            raise ValueError('Positive finite handoff radius required')
+        if self.safe_handoff_bounds:
+            if len(self.safe_handoff_bounds) != len(self.room_centers):
+                raise ValueError('Room bounds must match centers')
+            for bounds, center in zip(self.safe_handoff_bounds, self.room_centers):
+                if len(bounds) != 4 or not all(math.isfinite(v) for v in bounds):
+                    raise ValueError('Finite rectangular room bounds required')
+                x0,x1,y0,y1 = bounds
+                if not (x0 < center[0] < x1 and y0 < center[1] < y1):
+                    raise ValueError('Room center must be inside its bounds')
+
+    def _discovered_decision(self, xy):
+        if self.handoff_room_index is not None and not self.handoff_complete:
+            center = self.room_centers[self.handoff_room_index]
+            if math.dist(xy, center) > self.handoff_radius:
+                return dict(mode='handoff', goal_xy=center, room_index=self.handoff_room_index,
+                            evidence_count=self.evidence_count)
+            self.handoff_complete = True
+        return dict(mode='target', room_index=self.room_index, evidence_count=self.evidence_count)
 
     def advance(self, xy, yaw, target_pixels):
         if not all(math.isfinite(v) for v in (*xy, yaw, target_pixels)) or target_pixels < 0:
             raise ValueError('Search observation is invalid')
         if self.discovered:
-            return dict(mode='target', room_index=self.room_index, evidence_count=self.evidence_count)
+            return self._discovered_decision(xy)
         self.evidence_count = self.evidence_count + 1 if target_pixels >= self.min_pixels else 0
         if self.evidence_count >= self.confirmation_observations:
             self.discovered = True
-            return dict(mode='target', room_index=self.room_index, evidence_count=self.evidence_count)
+            # Opt-in teacher maneuver: finish entering the room before a large
+            # target-routing turn, so a skid turn does not begin at a door frame.
+            for index,(x0,x1,y0,y1) in enumerate(self.safe_handoff_bounds):
+                if x0 <= xy[0] <= x1 and y0 <= xy[1] <= y1:
+                    self.handoff_room_index = index
+                    break
+            return self._discovered_decision(xy)
         center = self.room_centers[self.room_index]
         if math.dist(xy, center) > self.arrival_radius:
             self.scan_yaw = None

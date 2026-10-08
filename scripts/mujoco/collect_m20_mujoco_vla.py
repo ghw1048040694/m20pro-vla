@@ -276,6 +276,10 @@ def parse_args() -> argparse.Namespace:
         "--s3-search-teacher", choices=("privileged-target", "observe-then-route"), default="privileged-target",
         help="S3 expert only: explore rooms until onboard RGB finds the task target, then route to it.",
     )
+    parser.add_argument(
+        "--s3-discovery-handoff", choices=("direct", "interior-center"), default="direct",
+        help="Observation teacher only: complete room entry before turning toward a discovered target.",
+    )
     parser.add_argument("--episodes", type=int, default=24)
     parser.add_argument(
         "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
@@ -456,6 +460,7 @@ class EpisodePlan:
     scene_name: str = ""
     room_object_assignment: tuple[tuple[str, str], ...] = ()
     search_room_centers: tuple[tuple[float, float], ...] = ()
+    search_room_bounds: tuple[tuple[float, float, float, float], ...] = ()
 
 
 def _wrap_angle(angle: float) -> float:
@@ -645,6 +650,7 @@ def _s3_assignment_provenance(args: argparse.Namespace, plan: "EpisodePlan") -> 
     return {
         "s3_room_assignment_mode": getattr(args, "s3_room_assignment", "canonical"),
         "s3_search_teacher_mode": getattr(args, "s3_search_teacher", "privileged-target"),
+        "s3_discovery_handoff_mode": getattr(args, "s3_discovery_handoff", "direct"),
         "room_object_assignment_privileged_metadata_only": dict(plan.room_object_assignment),
     }
 
@@ -1149,6 +1155,8 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
                                             if args.scene == "s3" else ()),
                     search_room_centers=(tuple(wing.interior_center for wing in episode.spec.rooms)
                                          if args.scene == "s3" else ()),
+                    search_room_bounds=(tuple((*wing.interior_x, *wing.interior_y) for wing in episode.spec.rooms)
+                                        if args.scene == "s3" else ()),
                 )
             )
     return plans
@@ -1170,6 +1178,10 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
     if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route":
         if args.scene != "s3" or getattr(args, "metadata_only", False):
             raise ValueError("--s3-search-teacher observe-then-route requires --scene s3 and real RGB arrays")
+    if getattr(args, "s3_discovery_handoff", "direct") != "direct" and (
+        args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
+    ):
+        raise ValueError("Interior-center handoff requires the S3 observation teacher")
     visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
     if visible_approach and args.scene != "s2":
         raise ValueError("--structured-start-mode visible-approach requires --scene s2")
@@ -1457,7 +1469,9 @@ def main() -> None:
             if args.mode == "search"
             else None
         )
-        room_search = (RoomSearchSchedule(plan.search_room_centers)
+        room_search = (RoomSearchSchedule(plan.search_room_centers,
+                           safe_handoff_bounds=(plan.search_room_bounds
+                               if getattr(args, 's3_discovery_handoff', 'direct') == 'interior-center' else ()))
                        if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route" else None)
         rgb_discovery_step = -1
         explored_room_scans = 0
@@ -1538,11 +1552,13 @@ def main() -> None:
                             rgb_discovery_step = step - args.warmup_steps
                         explored_room_scans = room_search.completed_room_scans
                         if search_decision['mode'] != 'scan':
-                            planning_goal = (plan.target_xy if room_search.discovered
+                            planning_goal = (plan.target_xy if search_decision['mode'] == 'target'
                                              else np.asarray(search_decision['goal_xy'], dtype=np.float64))
                             if not np.array_equal(search_planner.target_xy, planning_goal):
                                 search_planner = SearchMPCPlanner(model, planning_goal, plan.obstacles,
-                                    SearchMPCConfig(use_route_planner_when_obstacles=True), global_planner=global_planner)
+                                    SearchMPCConfig(use_route_planner_when_obstacles=True,
+                                        stop_distance=(0.20 if search_decision['mode'] == 'handoff' else 0.65)),
+                                    global_planner=global_planner)
                     goal_observed = room_search is None or room_search.discovered
                     if goal_observed and distance <= curriculum_success_radius and reached_step < 0:
                         reached_step = max(0, step - args.warmup_steps)
@@ -1629,8 +1645,11 @@ def main() -> None:
                     if room_search is not None:
                         teacher_trace.append((collected_steps - 1, *base_xy, base_yaw, observed_pixels,
                             room_search.discovered, room_search.room_index, room_search.completed_room_scans,
-                            room_search.swept, {'explore': 0, 'scan': 1, 'target': 2}[search_decision['mode']],
-                            *search_planner.target_xy, *expert))
+                            room_search.swept, {'explore': 0, 'scan': 1, 'target': 2, 'handoff': 3}[search_decision['mode']],
+                            *search_planner.target_xy, *expert,
+                            *planner_info.get('planning_goal', search_planner.target_xy),
+                            planner_info.get('global_waypoint_index', -1),
+                            planner_info.get('global_plan_reachable', -1)))
                 controller.step(data, expert)
                 if step >= args.warmup_steps:
                     contacts = _contacting_obstacles(model, data, obstacle_geom_ids)
@@ -1862,11 +1881,18 @@ def main() -> None:
             trace_path = args.output_dir / f"teacher_trace_{plan.episode_id:04d}.npz"
             columns = ('step', 'pre_x', 'pre_y', 'pre_yaw', 'target_rgb_pixels', 'discovered',
                        'room_index', 'completed_scans', 'net_scan_yaw', 'mode', 'goal_x', 'goal_y',
-                       'forward', 'lateral', 'yaw_command', 'stop', 'post_x', 'post_y', 'contact_count')
+                       'forward', 'lateral', 'yaw_command', 'stop', 'route_goal_x', 'route_goal_y',
+                       'route_waypoint_index', 'route_reachable', 'post_x', 'post_y', 'contact_count')
             trace = np.asarray(teacher_trace, dtype=np.float64).reshape((-1, len(columns)))
             np.savez_compressed(trace_path, **{key: trace[:, i] for i, key in enumerate(columns)})
             metadata['teacher_diagnostic_trace'] = str(trace_path)
             metadata['teacher_diagnostic_trace_policy_input'] = False
+            if rgb_discovery_step >= 2:
+                discovery_path = args.output_dir / f"teacher_discovery_rgb_{plan.episode_id:04d}.npz"
+                indices = np.arange(rgb_discovery_step - 2, rgb_discovery_step + 1)
+                np.savez_compressed(discovery_path, step=indices,
+                                    front_rgb=front[indices], rear_rgb=rear[indices])
+                metadata['teacher_discovery_rgb_diagnostic'] = str(discovery_path)
         if not metadata["quality_passed"]:
             rejected_summaries.append(metadata)
             rejected_metadata_path.write_text(

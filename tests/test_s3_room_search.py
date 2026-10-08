@@ -49,5 +49,25 @@ class RoomSearchTests(unittest.TestCase):
                 self.assertEqual(schedule.advance(self.centers[0],yaw,0)['mode'],'scan')
         self.assertEqual(schedule.completed_room_scans,0)
 
+    def test_interior_discovery_completes_entry_and_keeps_rgb_memory(self):
+        schedule=RoomSearchSchedule(self.centers,safe_handoff_bounds=((2.,4.,1.,4.),(4.,6.,-4.,-1.),(7.,9.,-1.,1.)))
+        for _ in range(3): decision=schedule.advance((3.,1.5),1.4,6)
+        self.assertTrue(schedule.discovered)
+        self.assertEqual(decision['mode'],'handoff')
+        self.assertEqual(decision['goal_xy'],self.centers[0])
+        self.assertEqual(schedule.advance((3.,2.),1.4,0)['mode'],'handoff')
+        self.assertEqual(schedule.advance((3.,2.8),1.4,0)['mode'],'target')
+        self.assertEqual(schedule.advance((3.,1.5),1.4,0)['mode'],'target')
+
+    def test_corridor_discovery_has_no_extra_room_visit(self):
+        schedule=RoomSearchSchedule(self.centers,safe_handoff_bounds=((2.,4.,1.,4.),(4.,6.,-4.,-1.),(7.,9.,-1.,1.)))
+        for _ in range(3): decision=schedule.advance((2.6,.45),.29,5)
+        self.assertEqual(decision['mode'],'target')
+        self.assertIsNone(schedule.handoff_room_index)
+
+    def test_handoff_geometry_is_validated(self):
+        for bounds in (((0.,1.,0.,1.),), ((0.,1.,0.,1.),)*3):
+            with self.assertRaises(ValueError):RoomSearchSchedule(self.centers,safe_handoff_bounds=bounds)
+
 
 if __name__=='__main__': unittest.main()
