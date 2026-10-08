@@ -40,6 +40,7 @@ from m20pro_vla.planning import (
     obstacle_clearance_xy,
 )
 from m20pro_vla.sim.corridor import (
+    ROOM_OBJECT_PERMUTATIONS,
     all_walls as corridor_all_walls,
     default_episode as corridor_default_episode,
     sample_episode as corridor_sample_episode,
@@ -266,6 +267,10 @@ def parse_args() -> argparse.Namespace:
             "(one layout); 'sampled' rejection-samples a jittered building per layout."
         ),
     )
+    parser.add_argument(
+        "--s3-room-assignment", choices=("canonical", "balanced-permutations"), default="canonical",
+        help="Sampled S3 only: cycle all six object-to-room assignments by absolute layout ID.",
+    )
     parser.add_argument("--episodes", type=int, default=24)
     parser.add_argument(
         "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
@@ -444,6 +449,7 @@ class EpisodePlan:
     # through doorways and which therefore drive the teacher's global planner.
     scene_kind: str = "s1"
     scene_name: str = ""
+    room_object_assignment: tuple[tuple[str, str], ...] = ()
 
 
 def _wrap_angle(angle: float) -> float:
@@ -627,6 +633,15 @@ def _task_language_for(
     }
 
 
+def _s3_assignment_provenance(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
+    if plan.scene_kind != "s3":
+        return {}
+    return {
+        "s3_room_assignment_mode": getattr(args, "s3_room_assignment", "canonical"),
+        "room_object_assignment_privileged_metadata_only": dict(plan.room_object_assignment),
+    }
+
+
 def _plan_only_metadata(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
     """Episode JSON for a declared-but-not-collected evaluation layout.
 
@@ -675,6 +690,7 @@ def _plan_only_metadata(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
         "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
         "metadata_only": True,
         **_visible_approach_provenance(args, plan),
+        **_s3_assignment_provenance(args, plan),
         "plan_only": True,
         **task_language,
         "target_label": plan.target_label,
@@ -1057,7 +1073,10 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
         if args.scene_episode == "default":
             episode = default_episode()
         else:
-            episode = sampler(rng, attempts=64)
+            sampler_options = {}
+            if args.scene == "s3" and getattr(args, "s3_room_assignment", "canonical") == "balanced-permutations":
+                sampler_options["room_object_order"] = ROOM_OBJECT_PERMUTATIONS[layout_id % len(ROOM_OBJECT_PERMUTATIONS)]
+            episode = sampler(rng, attempts=64, **sampler_options)
             if episode is None:
                 print(
                     json.dumps(
@@ -1119,6 +1138,8 @@ def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> lis
                     initial_target_visible=_target_visible_from(episode_start, target_xy, walls),
                     scene_kind=args.scene,
                     scene_name=str(episode.spec.name),
+                    room_object_assignment=(tuple((wing.name, wing.object_name) for wing in episode.spec.rooms)
+                                            if args.scene == "s3" else ()),
                 )
             )
     return plans
@@ -1134,6 +1155,9 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
     keeps a poisoned episode out of the dataset.
     """
     structured = args.scene in {"s2", "s3"}
+    assignment = getattr(args, "s3_room_assignment", "canonical")
+    if assignment != "canonical" and (args.scene != "s3" or args.scene_episode != "sampled"):
+        raise ValueError("--s3-room-assignment balanced-permutations requires sampled --scene s3")
     visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
     if visible_approach and args.scene != "s2":
         raise ValueError("--structured-start-mode visible-approach requires --scene s2")
@@ -1624,6 +1648,7 @@ def main() -> None:
             "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
             "metadata_only": args.metadata_only,
             **_visible_approach_provenance(args, plan),
+            **_s3_assignment_provenance(args, plan),
             **task_language,
             "target_label": plan.target_label,
             "target_xy_privileged_label_only": plan.target_xy.tolist(),

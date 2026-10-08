@@ -64,3 +64,13 @@ evidence rule. A fresh movement action cancels the candidate. LiDAR emergency
 stops remain immediate and do not depend on these model votes. Traces record
 prediction generation, freshness and forced replans for verification. This is
 an execution experiment, not a change to model weights or acceptance thresholds.
+
+For new S3 collection, `collection.s3_room_assignment: balanced-permutations`
+cycles all six assignments of green cylinder, yellow box and red cube to the
+north, south and end rooms using absolute layout ID modulo six. Each layout
+still emits all three target instructions with identical geometry and start.
+This option requires `scene: s3` and `scene_episode: sampled`; canonical sampling
+and existing declared evaluation layouts retain their historical mapping.
+Room ownership is saved as privileged provenance in JSON only, never as a
+policy input or array training feature. Review accepted trajectories and room
+balance after physical collection; geometric reachability alone is insufficient.

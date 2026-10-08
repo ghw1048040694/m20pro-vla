@@ -54,6 +54,7 @@ from __future__ import annotations
 import dataclasses
 from collections import deque
 from dataclasses import dataclass, field
+from itertools import permutations
 
 import numpy as np
 
@@ -1033,12 +1034,21 @@ def _sample_objects(
     return tuple(objects)
 
 
-def sample_episode(rng: np.random.Generator, attempts: int = 48) -> CorridorEpisode | None:
+ROOM_OBJECT_PERMUTATIONS = tuple(permutations(("green_cylinder", "yellow_box", "red_cube")))
+
+
+def sample_episode(
+    rng: np.random.Generator, attempts: int = 48, *,
+    room_object_order: tuple[str, str, str] | None = None,
+) -> CorridorEpisode | None:
     """Sample a jittered S3 episode that still satisfies every hard constraint.
 
     Rejection sampling keeps the family honest: nothing is silently relaxed.
     ``None`` means the sampler refused rather than emit an invalid building.
     """
+    order = tuple(room_object_order) if room_object_order is not None else ROOM_OBJECT_PERMUTATIONS[0]
+    if order not in ROOM_OBJECT_PERMUTATIONS:
+        raise ValueError("room_object_order must place each of the three task objects in one room")
     t = WALL_THICKNESS_M
     for _ in range(max(1, attempts)):
         corridor_length = float(rng.uniform(5.00, 6.40))
@@ -1112,7 +1122,8 @@ def sample_episode(rng: np.random.Generator, attempts: int = 48) -> CorridorEpis
             entrance_side="west",
             entrance_center=0.0,
             entrance_width=door_entrance,
-            rooms=(north, south, end),
+            rooms=tuple(dataclasses.replace(wing, object_name=name)
+                        for wing, name in zip((north, south, end), order)),
         )
         if not validate_multiroom(spec)["ok"]:
             continue
@@ -1149,6 +1160,7 @@ __all__ = [
     "MIN_CORRIDOR_WIDTH_M",
     "OPPOSITE_SIDE",
     "ROOM_OBJECT_MARGIN_M",
+    "ROOM_OBJECT_PERMUTATIONS",
     "CorridorEpisode",
     "CorridorSpec",
     "S3_OBJECT_POSITIONS",
