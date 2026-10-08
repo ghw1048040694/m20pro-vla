@@ -10,6 +10,17 @@ from pathlib import Path
 from typing import Any, TextIO
 
 
+def smolvla_dataset_backend(config: dict[str, Any]) -> str:
+    backend = str(config['smolvla'].get('dataset_backend', 'lerobot'))
+    if backend not in {'lerobot', 'raw'}:
+        raise ValueError(f'Unknown SmolVLA dataset backend: {backend}')
+    return backend
+
+
+def smolvla_dataset_path(config: dict[str, Any]) -> Path:
+    return Path(config['paths']['dataset' if smolvla_dataset_backend(config) == 'raw' else 'lerobot_dataset'])
+
+
 def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
     """Create a dataset-adapted local policy source from the cached SmolVLA base."""
     from huggingface_hub import snapshot_download
@@ -21,7 +32,7 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
 
     paths = config["paths"]
     settings = config["smolvla"]
-    dataset_root = Path(paths["lerobot_dataset"])
+    dataset_root = smolvla_dataset_path(config)
     prepared = Path(paths["smolvla_prepared_base"])
     prepared.mkdir(parents=True, exist_ok=True)
 
@@ -37,7 +48,11 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
                 local_files_only=bool(settings.get("offline", False)),
             )
         )
-    metadata = LeRobotDatasetMetadata(str(settings["repo_id"]), root=dataset_root)
+    if smolvla_dataset_backend(config) == 'raw':
+        from .raw_smolvla import make_raw_dataset, raw_training_settings
+        metadata = make_raw_dataset(dataset_root, raw_training_settings(config)).meta
+    else:
+        metadata = LeRobotDatasetMetadata(str(settings["repo_id"]), root=dataset_root)
     features = dataset_to_policy_features(metadata.features)
     policy_config = PreTrainedConfig.from_pretrained(snapshot)
     policy_config.input_features = {
@@ -89,20 +104,20 @@ def smolvla_training_command(
 ) -> list[str]:
     paths = config["paths"]
     settings = config["smolvla"]
-    executable = conda_env_executable(
-        settings.get("conda_env", "lerobot"),
-        "lerobot-train",
-    )
+    raw = smolvla_dataset_backend(config) == 'raw'
+    prefix = ([str(conda_env_executable(settings.get('conda_env', 'lerobot'), 'python')),
+               '-m', 'm20pro_vla.training.raw_smolvla'] if raw else
+              [str(conda_env_executable(settings.get('conda_env', 'lerobot'), 'lerobot-train'))])
     if settings.get("resume_checkpoint"):
         checkpoint, _ = validate_smolvla_resume(config)
         # LeRobot restores the policy and optimizer from this saved config.
         # Passing policy.path here would bypass its resume checkpoint handling.
-        return [str(executable), f"--config_path={checkpoint / 'pretrained_model' / 'train_config.json'}", "--resume=true"]
+        return [*prefix, f"--config_path={checkpoint / 'pretrained_model' / 'train_config.json'}", "--resume=true"]
     return [
-        str(executable),
+        *prefix,
         f"--policy.path={policy_path or settings['base_model']}",
         f"--dataset.repo_id={settings['repo_id']}",
-        f"--dataset.root={paths['lerobot_dataset']}",
+        f"--dataset.root={smolvla_dataset_path(config)}",
         f"--dataset.video_backend={settings.get('video_backend', 'pyav')}",
         f"--output_dir={paths['smolvla_checkpoint_dir']}",
         f"--job_name={config['experiment_id']}-smolvla",
@@ -144,8 +159,11 @@ def validate_smolvla_resume(config: dict[str, Any]) -> tuple[Path, int]:
             raise ValueError(f"Resume training configuration differs: {key}")
     if Path(saved["output_dir"]).resolve() != output:
         raise ValueError("Resume output differs from saved configuration")
-    if Path(saved["dataset"]["root"]).resolve() != Path(config["paths"]["lerobot_dataset"]).resolve() or saved["dataset"]["repo_id"] != settings["repo_id"]:
+    if Path(saved["dataset"]["root"]).resolve() != smolvla_dataset_path(config).resolve() or saved["dataset"]["repo_id"] != settings["repo_id"]:
         raise ValueError("Resume dataset differs from saved configuration")
+    if smolvla_dataset_backend(config) == 'raw':
+        from .raw_smolvla import make_raw_dataset, raw_training_settings, validate_raw_resume_contract
+        validate_raw_resume_contract(output, make_raw_dataset(smolvla_dataset_path(config), raw_training_settings(config)))
     step = int(json.loads((checkpoint / "training_state/training_step.json").read_text())["step"])
     if not 0 < step < int(settings["steps"]):
         raise ValueError("Resume checkpoint must precede the final training step")
@@ -167,13 +185,18 @@ def run_smolvla_training(
     executable = Path(command[0])
     if not executable.is_file():
         raise FileNotFoundError(f"SmolVLA training executable not found: {executable}")
-    dataset = Path(config["paths"]["lerobot_dataset"])
-    if not (dataset / "meta" / "info.json").is_file():
+    dataset = smolvla_dataset_path(config)
+    raw = smolvla_dataset_backend(config) == 'raw'
+    if not raw and not (dataset / "meta" / "info.json").is_file():
         raise FileNotFoundError(f"Converted LeRobotDataset is missing: {dataset}")
     output = Path(config["paths"]["smolvla_checkpoint_dir"])
     if output.exists() and not resume:
         raise FileExistsError(f"SmolVLA output already exists: {output}")
     environment = os.environ.copy()
+    if raw:
+        from .raw_smolvla import RAW_SETTINGS_ENV, raw_training_settings
+        environment[RAW_SETTINGS_ENV] = json.dumps(raw_training_settings(config))
+        environment['PYTHONPATH'] = os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[2]), environment.get('PYTHONPATH')]))
     if config["smolvla"].get("offline", False):
         environment.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
     result = subprocess.run(command, stdout=stdout, stderr=stderr, env=environment, check=False)
@@ -185,6 +208,7 @@ def run_smolvla_training(
         "output_dir": str(output),
         "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
         "resume_step": resume_step,
+        "dataset_backend": 'raw' if raw else 'lerobot',
     }
     if output.exists():
         (output / "m20_training_run.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

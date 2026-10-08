@@ -27,11 +27,30 @@ actual action/state/task rows. Cached subset views reference unchanged video
 files but expose only the selected training rows/timestamps; merging stream-copies
 video without re-encoding. Reports include reused/new episode counts and actual
 episode order. Partial work never replaces an existing training dataset.
-# Raw reader prototype
+# Raw training backend (opt-in)
 
-`data.raw_dataset.RawM20Dataset` is an experimental CPU reader, not an enabled
-training backend. It prepares strided RGB arrays once without video encoding,
+`data.raw_dataset.RawM20Dataset` prepares strided RGB arrays once without video encoding,
 uses content-verified immutable caches and bounded per-worker memory mappings,
 and preserves stop sampling, state projection and episode-local action padding.
-Its raw pixels differ from lossy H264 decoding. Full-dataset sustained memory and
-throughput checks and official training integration are required before activation.
+Its raw pixels differ from lossy H264 decoding.
+
+The existing `experiment --stage train-smolvla` supports
+`smolvla.dataset_backend: "raw"` as an opt-in. It reads the quality-audited
+`paths.dataset` directly, prepares/reuses array caches during training setup,
+and calls the installed official LeRobot training loop with a process-local
+dataset factory. There is no separate video conversion step or second training
+CLI. `lerobot` remains the default backend and its incremental conversion cache
+remains available. `smolvla.raw_cache_dir` defaults to `.runtime/cache/raw_training`;
+`smolvla.raw_max_open_episodes` defaults to 4 per worker. Sampling uses the existing
+source_fps/frame_stride/stop-repeat settings. Resume validates source identities,
+sampling, reader/adapter code and array artifact digests against the saved run.
+
+CPU validation covered all 206 real training episodes/85,837 rows, feature stats,
+episode padding, 12,000 random reads with two workers, and official pre/post
+processors. The adapter also has CPU integration tests for the unified command,
+policy source preparation without MP4, factory and resume contract. These checks
+do not establish model forward/backward correctness or GPU training performance.
+The active TRAIN23 configuration and runtime remain on the certified standard
+backend; no live experiment is switched. Use this option for a new reviewed run,
+then validate actual model training and the unchanged closed-loop acceptance
+panel, preserving prior outputs.

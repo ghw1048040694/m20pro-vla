@@ -122,6 +122,9 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
     checkpoint = Path(paths["checkpoint_dir"]) / "best.pt"
     eval_summary = Path(paths["eval_dir"]) / "summary.json"
     lerobot_dataset = Path(paths["lerobot_dataset"])
+    from ..training.smolvla import smolvla_dataset_backend, smolvla_dataset_path
+    smolvla_backend = smolvla_dataset_backend(config)
+    smolvla_dataset = smolvla_dataset_path(config)
     smolvla_output = Path(paths["smolvla_checkpoint_dir"])
     return {
         "schema": "m20pro_vla_experiment_plan_v1",
@@ -151,7 +154,10 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
                 "output_already_exists": checkpoint.exists(),
             },
             "train-smolvla": {
-                "dataset_ready": (lerobot_dataset / "meta" / "info.json").is_file(),
+                "dataset_backend": smolvla_backend,
+                "dataset": str(smolvla_dataset),
+                "dataset_ready": (bool(list(smolvla_dataset.glob('episode_*.npz'))) if smolvla_backend == 'raw'
+                                  else (lerobot_dataset / "meta" / "info.json").is_file()),
                 "output": str(smolvla_output),
                 "output_already_exists": smolvla_output.exists(),
                 "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
