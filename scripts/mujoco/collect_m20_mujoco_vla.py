@@ -1461,6 +1461,7 @@ def main() -> None:
                        if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route" else None)
         rgb_discovery_step = -1
         explored_room_scans = 0
+        teacher_trace = []  # Diagnostic sidecar only; never part of policy observations.
         renderer = mujoco.Renderer(model, height=args.policy_height, width=args.policy_width) if collect_arrays else None
         demo_renderer = (
             mujoco.Renderer(model, height=args.video_height, width=args.video_width)
@@ -1625,12 +1626,19 @@ def main() -> None:
                                 video.stdin.write(front[index].tobytes())
                     collected_steps += 1
                     terminal_stop_steps = _update_search_stop_tail(terminal_stop_steps, expert)
+                    if room_search is not None:
+                        teacher_trace.append((collected_steps - 1, *base_xy, base_yaw, observed_pixels,
+                            room_search.discovered, room_search.room_index, room_search.completed_room_scans,
+                            room_search.swept, {'explore': 0, 'scan': 1, 'target': 2}[search_decision['mode']],
+                            *search_planner.target_xy, *expert))
                 controller.step(data, expert)
                 if step >= args.warmup_steps:
                     contacts = _contacting_obstacles(model, data, obstacle_geom_ids)
                     if contacts:
                         obstacle_contact_steps += 1
                         obstacle_contact_names.update(contacts)
+                    if room_search is not None:
+                        teacher_trace[-1] += (*data.qpos[:2], len(contacts))
                 if (
                     args.mode == "search"
                     and args.search_stop_after_success
@@ -1850,6 +1858,15 @@ def main() -> None:
         }
         metadata["quality_gates"] = quality_gates
         metadata["quality_passed"] = all(quality_gates.values())
+        if room_search is not None:
+            trace_path = args.output_dir / f"teacher_trace_{plan.episode_id:04d}.npz"
+            columns = ('step', 'pre_x', 'pre_y', 'pre_yaw', 'target_rgb_pixels', 'discovered',
+                       'room_index', 'completed_scans', 'net_scan_yaw', 'mode', 'goal_x', 'goal_y',
+                       'forward', 'lateral', 'yaw_command', 'stop', 'post_x', 'post_y', 'contact_count')
+            trace = np.asarray(teacher_trace, dtype=np.float64).reshape((-1, len(columns)))
+            np.savez_compressed(trace_path, **{key: trace[:, i] for i, key in enumerate(columns)})
+            metadata['teacher_diagnostic_trace'] = str(trace_path)
+            metadata['teacher_diagnostic_trace_policy_input'] = False
         if not metadata["quality_passed"]:
             rejected_summaries.append(metadata)
             rejected_metadata_path.write_text(
