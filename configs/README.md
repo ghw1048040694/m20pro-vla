@@ -13,3 +13,17 @@ run outputs. Use a stable domain name plus a contract version, for example
 
 Metrics, checkpoints, generated scenes, and videos belong under the ignored
 `.runtime/` tree, never beside a config file.
+
+The existing `experiment --stage convert` stage reuses content-verified finished
+LeRobot artifacts under `.runtime/cache/lerobot_conversion`. Only new or changed
+NPZ/JSON episodes are encoded. Cache keys include sampling/stop weights, codec,
+adapter code and LeRobot version; artifact hashes reject stale or incomplete data.
+`smolvla.conversion_workers` defaults to 2 bounded CPU workers (allowed 1–4).
+`smolvla.conversion_cache_dir` can override the shared cache location. These are
+execution settings; they do not change action labels or acceptance thresholds.
+Existing completed artifacts can be certified with `register_conversion_cache`
+after their normal manifest/frame/quality checks. Certification also verifies
+actual action/state/task rows. Cached subset views reference unchanged video
+files but expose only the selected training rows/timestamps; merging stream-copies
+video without re-encoding. Reports include reused/new episode counts and actual
+episode order. Partial work never replaces an existing training dataset.

@@ -381,7 +381,7 @@ def command_experiment(args: argparse.Namespace) -> int:
             return _finish(context, True, report, compact=args.json)
 
         if stage == "convert":
-            from .data import convert_m20_to_lerobot
+            from .data.conversion_cache import convert_m20_incremental
 
             config = load_experiment_config(args.config)
             settings = config["smolvla"]
@@ -390,9 +390,11 @@ def command_experiment(args: argparse.Namespace) -> int:
                 "experiment-convert",
                 {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
             )
-            report = convert_m20_to_lerobot(
+            report = convert_m20_incremental(
                 source=Path(config["paths"]["dataset"]),
                 output=Path(config["paths"]["lerobot_dataset"]),
+                cache_root=Path(settings.get("conversion_cache_dir", ".runtime/cache/lerobot_conversion")),
+                workers=int(settings.get("conversion_workers", 2)),
                 repo_id=str(settings["repo_id"]),
                 source_fps=int(settings["source_fps"]),
                 frame_stride=int(settings["frame_stride"]),
