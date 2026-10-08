@@ -417,7 +417,7 @@ def command_experiment(args: argparse.Namespace) -> int:
                 raise RuntimeError("Source dataset failed distribution/quality audit; collect or filter episodes before SmolVLA training")
             if not stage_plan["dataset_ready"]:
                 raise FileNotFoundError(f"Converted LeRobotDataset is missing: {plan['paths']['lerobot_dataset']}")
-            if stage_plan["output_already_exists"]:
+            if stage_plan["output_already_exists"] and not stage_plan.get("resume_checkpoint"):
                 raise FileExistsError(f"SmolVLA output already exists: {stage_plan['output']}")
             config = load_experiment_config(args.config)
             with (context.path / "logs" / "stdout.log").open("a", encoding="utf-8") as stdout, (

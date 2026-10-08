@@ -98,7 +98,8 @@
     "use_peft": false,
     "init_policy": ".runtime/checkpoints/smolvla_m20_s2_v8_recovery_approach_v1_steps5000/checkpoints/005000/pretrained_model",
     "offline": true,
-    "recovery_terminal_stop_repeat": 1
+    "recovery_terminal_stop_repeat": 1,
+    "resume_checkpoint": ".runtime/checkpoints/smolvla_m20_s2_v8_far_approach_bodygyro_v1_steps10000/checkpoints/002500"
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s2_room_v5",

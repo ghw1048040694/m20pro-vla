@@ -93,6 +93,11 @@ def smolvla_training_command(
         settings.get("conda_env", "lerobot"),
         "lerobot-train",
     )
+    if settings.get("resume_checkpoint"):
+        checkpoint, _ = validate_smolvla_resume(config)
+        # LeRobot restores the policy and optimizer from this saved config.
+        # Passing policy.path here would bypass its resume checkpoint handling.
+        return [str(executable), f"--config_path={checkpoint / 'pretrained_model' / 'train_config.json'}", "--resume=true"]
     return [
         str(executable),
         f"--policy.path={policy_path or settings['base_model']}",
@@ -115,6 +120,38 @@ def smolvla_training_command(
     ]
 
 
+def validate_smolvla_resume(config: dict[str, Any]) -> tuple[Path, int]:
+    """Only resume a complete checkpoint from this unchanged training run."""
+    settings = config["smolvla"]
+    output = Path(config["paths"]["smolvla_checkpoint_dir"]).resolve()
+    checkpoint = Path(settings["resume_checkpoint"]).resolve()
+    if checkpoint.parent != output / "checkpoints":
+        raise ValueError("Resume checkpoint must belong to the configured training output")
+    required = (
+        "pretrained_model/config.json", "pretrained_model/model.safetensors",
+        "pretrained_model/train_config.json", "pretrained_model/policy_preprocessor.json",
+        "pretrained_model/policy_postprocessor.json", "training_state/training_step.json",
+        "training_state/optimizer_param_groups.json", "training_state/optimizer_state.safetensors",
+        "training_state/scheduler_state.json", "training_state/rng_state.safetensors",
+    )
+    for relative in required:
+        path = checkpoint / relative
+        if not path.is_file() or path.stat().st_size == 0:
+            raise FileNotFoundError(f"Incomplete resume checkpoint: {path}")
+    saved = json.loads((checkpoint / "pretrained_model/train_config.json").read_text())
+    for key in ("steps", "batch_size", "seed", "num_workers", "log_freq", "save_freq"):
+        if saved[key] != settings[key]:
+            raise ValueError(f"Resume training configuration differs: {key}")
+    if Path(saved["output_dir"]).resolve() != output:
+        raise ValueError("Resume output differs from saved configuration")
+    if Path(saved["dataset"]["root"]).resolve() != Path(config["paths"]["lerobot_dataset"]).resolve() or saved["dataset"]["repo_id"] != settings["repo_id"]:
+        raise ValueError("Resume dataset differs from saved configuration")
+    step = int(json.loads((checkpoint / "training_state/training_step.json").read_text())["step"])
+    if not 0 < step < int(settings["steps"]):
+        raise ValueError("Resume checkpoint must precede the final training step")
+    return checkpoint, step
+
+
 def run_smolvla_training(
     config: dict[str, Any],
     *,
@@ -123,7 +160,9 @@ def run_smolvla_training(
 ) -> dict[str, Any]:
     if config["smolvla"].get("offline", False):
         os.environ.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
-    policy_path = prepare_smolvla_training_source(config)
+    resume = bool(config["smolvla"].get("resume_checkpoint"))
+    resume_step = validate_smolvla_resume(config)[1] if resume else None
+    policy_path = None if resume else prepare_smolvla_training_source(config)
     command = smolvla_training_command(config, policy_path=policy_path)
     executable = Path(command[0])
     if not executable.is_file():
@@ -132,7 +171,7 @@ def run_smolvla_training(
     if not (dataset / "meta" / "info.json").is_file():
         raise FileNotFoundError(f"Converted LeRobotDataset is missing: {dataset}")
     output = Path(config["paths"]["smolvla_checkpoint_dir"])
-    if output.exists():
+    if output.exists() and not resume:
         raise FileExistsError(f"SmolVLA output already exists: {output}")
     environment = os.environ.copy()
     if config["smolvla"].get("offline", False):
@@ -144,6 +183,8 @@ def run_smolvla_training(
         "exit_code": result.returncode,
         "dataset": str(dataset),
         "output_dir": str(output),
+        "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
+        "resume_step": resume_step,
     }
     if output.exists():
         (output / "m20_training_run.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -156,4 +197,5 @@ __all__ = [
     "prepare_smolvla_training_source",
     "run_smolvla_training",
     "smolvla_training_command",
+    "validate_smolvla_resume",
 ]

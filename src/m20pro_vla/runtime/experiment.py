@@ -154,6 +154,7 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
                 "dataset_ready": (lerobot_dataset / "meta" / "info.json").is_file(),
                 "output": str(smolvla_output),
                 "output_already_exists": smolvla_output.exists(),
+                "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
             },
             "smolvla-eval": {
                 "workflow": "smolvla-eval",
