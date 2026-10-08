@@ -12,7 +12,7 @@
     "lerobot_dataset": ".runtime/lerobot/m20_s2_v8_bodygyro_onpolicy_recovery_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s2_v8_bodygyro_onpolicy_recovery_v1_from_far_10000",
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s2_v8_bodygyro_onpolicy_recovery_v1_steps10000_radius105_regraded",
     "recovery_dataset": ".runtime/datasets/m20_s2_v8_bodygyro_onpolicy_recovery_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s2_v8_bodygyro_onpolicy_recovery_v1_training_sources"
   },
@@ -110,7 +110,7 @@
     "motion_smoothing": 0.2,
     "max_forward_delta": 0.02,
     "max_yaw_delta": 0.015,
-    "success_radius": 0.95,
+    "success_radius": 1.05,
     "safety_stop_distance": 0.5,
     "visual_stop_min_pixels": 80,
     "post_stop_hold_steps": 25,
