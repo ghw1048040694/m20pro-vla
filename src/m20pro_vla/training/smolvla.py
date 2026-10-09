@@ -17,6 +17,29 @@ def smolvla_dataset_backend(config: dict[str, Any]) -> str:
     return backend
 
 
+def smolvla_temporal_spec(config: dict[str, Any]):
+    value = config['smolvla'].get('temporal_rgb')
+    if value is None:
+        return None
+    from ..data.temporal_rgb import TemporalRGBSpec
+    spec = TemporalRGBSpec.from_dict(value)
+    settings = config['smolvla']
+    if (smolvla_dataset_backend(config) != 'raw' or spec.fps != 25
+            or len(spec.offsets) != 3
+            or settings['source_fps'] != spec.fps * settings['frame_stride']):
+        raise ValueError('Temporal training requires raw three-slot 25Hz source ticks')
+    return spec.to_dict()
+
+
+def configure_temporal_training_environment(config, environment):
+    # The reviewed experiment config is authoritative over inherited shell state.
+    spec = smolvla_temporal_spec(config)
+    environment.pop('M20PRO_TEMPORAL_TRAINING_SPEC', None)
+    if spec is not None:
+        environment['M20PRO_TEMPORAL_TRAINING_SPEC'] = json.dumps(spec)
+    return environment
+
+
 def smolvla_dataset_path(config: dict[str, Any]) -> Path:
     return Path(config['paths']['dataset' if smolvla_dataset_backend(config) == 'raw' else 'lerobot_dataset'])
 
@@ -164,6 +187,14 @@ def validate_smolvla_resume(config: dict[str, Any]) -> tuple[Path, int]:
     if smolvla_dataset_backend(config) == 'raw':
         from .raw_smolvla import make_raw_dataset, raw_training_settings, validate_raw_resume_contract
         validate_raw_resume_contract(output, make_raw_dataset(smolvla_dataset_path(config), raw_training_settings(config)))
+    temporal = smolvla_temporal_spec(config)
+    sidecar = checkpoint / 'pretrained_model/m20_temporal_policy_candidate.json'
+    if sidecar.is_file():
+        stored = json.loads(sidecar.read_text())['core']['temporal_rgb']
+        if temporal != stored:
+            raise ValueError('Resume temporal sampling differs from experiment config')
+    elif temporal is not None:
+        raise ValueError('Temporal resume requires its saved policy contract')
     step = int(json.loads((checkpoint / "training_state/training_step.json").read_text())["step"])
     if not 0 < step < int(settings["steps"]):
         raise ValueError("Resume checkpoint must precede the final training step")
@@ -178,6 +209,7 @@ def run_smolvla_training(
 ) -> dict[str, Any]:
     if config["smolvla"].get("offline", False):
         os.environ.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
+    temporal_spec = smolvla_temporal_spec(config)
     resume = bool(config["smolvla"].get("resume_checkpoint"))
     resume_step = validate_smolvla_resume(config)[1] if resume else None
     policy_path = None if resume else prepare_smolvla_training_source(config)
@@ -192,7 +224,7 @@ def run_smolvla_training(
     output = Path(config["paths"]["smolvla_checkpoint_dir"])
     if output.exists() and not resume:
         raise FileExistsError(f"SmolVLA output already exists: {output}")
-    environment = os.environ.copy()
+    environment = configure_temporal_training_environment(config, os.environ.copy())
     if raw:
         from .raw_smolvla import RAW_SETTINGS_ENV, raw_training_settings
         environment[RAW_SETTINGS_ENV] = json.dumps(raw_training_settings(config))
@@ -209,6 +241,7 @@ def run_smolvla_training(
         "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
         "resume_step": resume_step,
         "dataset_backend": 'raw' if raw else 'lerobot',
+        "temporal_rgb": temporal_spec,
     }
     if output.exists():
         (output / "m20_training_run.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
