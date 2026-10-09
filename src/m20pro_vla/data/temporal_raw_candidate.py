@@ -21,6 +21,12 @@ class TemporalRawDatasetCandidate(Dataset):
         self.dataset=dataset;self.spec=spec
         self.meta=dataset.meta
 
+    @property
+    def num_frames(self):return self.dataset.num_frames
+
+    @property
+    def num_episodes(self):return self.dataset.num_episodes
+
     def __len__(self):return len(self.dataset)
 
     def __getitem__(self,index):

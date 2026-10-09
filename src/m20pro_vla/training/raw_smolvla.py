@@ -1,7 +1,8 @@
 """Internal process adapter for the existing train-smolvla stage.
 
-Uses the installed official training loop; only its process-local dataset
-factory is replaced. This module is not a separate user-facing CLI.
+Uses the installed official training loop. By default its process-local dataset
+factory is replaced; an explicit temporal env opt-in also selects a matching policy.
+This module is not a separate user-facing CLI.
 """
 import json
 import hashlib
@@ -75,8 +76,16 @@ def official_raw_dataset_factory(cfg, settings):
 def main():
     settings = json.loads(os.environ[RAW_SETTINGS_ENV])
     import lerobot.scripts.lerobot_train as official
-    official.make_dataset = lambda cfg: official_raw_dataset_factory(cfg, settings)
-    official.main()
+    from .temporal_process_candidate import TEMPORAL_SETTINGS_ENV, temporal_process_hooks
+    temporal = os.environ.get(TEMPORAL_SETTINGS_ENV)
+    if temporal is None:
+        official.make_dataset = lambda cfg: official_raw_dataset_factory(cfg, settings)
+        official.main()
+    else:
+        from ..data.temporal_rgb import TemporalRGBSpec
+        spec = TemporalRGBSpec.from_dict(json.loads(temporal))
+        with temporal_process_hooks(official, settings, spec):
+            official.main()
 
 
 if __name__ == '__main__':
