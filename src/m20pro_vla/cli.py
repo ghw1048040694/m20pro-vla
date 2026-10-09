@@ -348,6 +348,9 @@ def command_experiment(args: argparse.Namespace) -> int:
         if args.dry_run or stage == "plan":
             plan["dry_run"] = bool(args.dry_run)
             return _finish(None, True, plan, compact=args.json)
+        if stage == "convert" and plan["stages"]["train-smolvla"]["dataset_backend"] == "raw":
+            return _finish(None, True, {"stage": stage, "skipped": True, "dataset_backend": "raw",
+                "reason": "Raw RGB trajectories are read directly; conversion is not part of this training plan."}, compact=args.json)
         os.environ.update(experiment_low_level_environment(load_experiment_config(args.config)))
         if stage in {"convert", "train-smolvla"}:
             dispatch_code = _dispatch_lerobot_stage_environment(args)

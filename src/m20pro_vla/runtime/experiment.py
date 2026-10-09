@@ -134,11 +134,11 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
         "low_level": config.get("low_level", {}),
         "training": training_plan,
         "stages": {
-            "convert": {
+            **({"convert": {
                 "source": str(paths["dataset"]),
                 "output": str(lerobot_dataset),
                 "output_already_exists": lerobot_dataset.exists(),
-            },
+            }} if smolvla_backend != 'raw' else {}),
             "collect": {"workflow": "collect", "args": experiment_stage_args(config, "collect")},
             "curate": {
                 "source": str(paths.get("raw_dataset", paths["dataset"])),
