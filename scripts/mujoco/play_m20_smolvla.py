@@ -255,21 +255,8 @@ def contacting_obstacles(
 
 
 def load_policy(checkpoint: Path, device: torch.device, action_replan_steps: int):
-    config = PreTrainedConfig.from_pretrained(checkpoint, local_files_only=True)
-    config.device = str(device)
-    config.pretrained_path = str(checkpoint)
-    config.n_action_steps = int(action_replan_steps)
-    policy = SmolVLAPolicy.from_pretrained(
-        checkpoint,
-        config=config,
-        local_files_only=True,
-    ).to(device).eval()
-    preprocessor, postprocessor = make_pre_post_processors(
-        policy_cfg=config,
-        pretrained_path=str(checkpoint),
-        preprocessor_overrides={"device_processor": {"device": str(device)}},
-    )
-    return policy, preprocessor, postprocessor
+    from m20pro_vla.runtime.temporal_policy import load_m20_policy
+    return load_m20_policy(checkpoint, device, action_replan_steps)
 
 
 def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) -> dict:
@@ -334,6 +321,9 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         policy_bundle if policy_bundle is not None else load_policy(args.checkpoint, device, args.action_replan_steps)
     )
     policy.reset()
+    from m20pro_vla.runtime.temporal_policy import TemporalRuntime
+    temporal_runtime = (TemporalRuntime(policy, preprocessor, postprocessor, device)
+                        if hasattr(policy.model, 'spec') else None)
 
     policy_width, policy_height = 160, 96
     policy_renderer = mujoco.Renderer(model, height=policy_height, width=policy_width)
@@ -425,7 +415,11 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 target_last_confident_step = step
             lidar = planar_lidar(model, data)
             state = m20_smolvla_state(proprioception(model, data), lidar)
-            action_tensor, prediction_evidence = action_freshener.predict(policy, lambda: predict_action(
+            if temporal_runtime is not None:
+                temporal_runtime.observe({'front': front, 'rear': rear}, tick=step,
+                    task=str(metadata['task_text']), episode=str(args.episode_json))
+            action_tensor, prediction_evidence = action_freshener.predict(policy, lambda: (
+                temporal_runtime.predict(state) if temporal_runtime is not None else predict_action(
                 {
                     "observation.images.front": front,
                     "observation.images.rear": rear,
@@ -438,7 +432,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 bool(policy.config.use_amp),
                 task=str(metadata["task_text"]),
                 robot_type="m20pro",
-            ), confirming=stop_confirmation.pending)
+            )), confirming=stop_confirmation.pending)
             raw = action_tensor.detach().cpu().numpy()[0]
             desired = executable_action(raw, args.stop_threshold)
             visual_stop_evidence = (
