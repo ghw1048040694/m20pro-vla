@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_temporal_learner_supervised_training",
+  "stage": "s3_independent_heldout18_learner_evaluation",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_observe_production",
     "dataset": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
@@ -117,11 +117,11 @@
     }
   },
   "smolvla_evaluation": {
-    "episodes_dir": ".runtime/datasets/m20_s3_corridor_eval",
-    "episode_ids": "9000,9001,9002,9003,9004,9005,9006,9007,9008,9009,9010,9011,9012,9013,9014",
-    "policy_steps": 2600,
+    "episodes_dir": ".runtime/datasets/m20_s3_independent_heldout18_20261009_v1",
+    "episode_ids": "21006,21007,21008,21009,21010,21011,21012,21013,21014,21015,21016,21017,21018,21019,21020,21021,21022,21023",
+    "policy_steps": 9500,
     "device": "cuda",
-    "seed": 20260918,
+    "seed": 20261009,
     "write_videos": false,
     "motion_smoothing": 0.2,
     "max_forward_delta": 0.02,
@@ -132,7 +132,9 @@
     "post_stop_hold_steps": 25,
     "obstacle_contact_tolerance_steps": 10,
     "fresh_stop_confirmation": true,
-    "checkpoint_step": 10000
+    "checkpoint_step": 10000,
+    "episode_count": 18,
+    "match_teacher_budget": false
   },
   "recovery_collection": {
     "episodes_dir": ".runtime/datasets/m20_s3_v8_multiroom_v1_raw",
@@ -154,7 +156,7 @@
     "max_visual_generalization_gap": 0.15
   },
   "closed_loop_acceptance": {
-    "min_episodes": 10,
+    "min_episodes": 18,
     "min_success_rate": 0.6,
     "min_discovery_rate": 0.8,
     "min_strict_pass_rate": 0.6,
