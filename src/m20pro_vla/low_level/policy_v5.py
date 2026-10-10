@@ -44,7 +44,7 @@ MuJoCo-specific conventions used here:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import mujoco
@@ -119,6 +119,8 @@ class M20V5PolicyControllerState:
 
     last_action: np.ndarray
     safety_recovery_active: bool
+    stop_pose: np.ndarray | None = None
+    brake_wheels: np.ndarray | None = None
 
 
 def resolve_onnx_path(explicit: str | Path | None = None) -> Path:
@@ -181,6 +183,8 @@ class M20V5PolicyController(M20LowLevelController):
         self.safety_recovery_active = False
         # Resolved lazily so importing the module never requires onnxruntime.
         self._providers = tuple(providers)
+        self._stop_pose = None
+        self._brake_wheels = np.zeros(4, dtype=np.float64)
 
     @staticmethod
     def _verify_actuator_order(model: mujoco.MjModel) -> None:
@@ -236,6 +240,8 @@ class M20V5PolicyController(M20LowLevelController):
         data.qvel[:] = 0.0
         self.last_action.fill(0.0)
         self._ctrl_target.fill(0.0)
+        self._stop_pose = None
+        self._brake_wheels.fill(0.0)
         self.safety_recovery_active = False
         mujoco.mj_forward(self.model, data)
 
@@ -243,11 +249,17 @@ class M20V5PolicyController(M20LowLevelController):
         return M20V5PolicyControllerState(
             last_action=self.last_action.copy(),
             safety_recovery_active=bool(self.safety_recovery_active),
+            stop_pose=None if self._stop_pose is None else self._stop_pose.copy(),
+            brake_wheels=self._brake_wheels.copy(),
         )
 
     def restore(self, state: M20V5PolicyControllerState) -> None:
         self.last_action[:] = state.last_action
         self.safety_recovery_active = bool(state.safety_recovery_active)
+        self._stop_pose = None if state.stop_pose is None else state.stop_pose.copy()
+        self._brake_wheels = np.zeros(4) if state.brake_wheels is None else state.brake_wheels.copy()
+        self._ctrl_target[:12] = STANCE + LEG_ACTION_SCALE * self.last_action[:12]
+        self._ctrl_target[12:] = WHEEL_ACTION_SCALE * self.last_action[12:]
 
     def _attitude(self, data: mujoco.MjData) -> tuple[float, float]:
         rotation = data.xmat[self._base_body_id].reshape(3, 3)
@@ -287,10 +299,24 @@ class M20V5PolicyController(M20LowLevelController):
               command: M20BodyCommand | np.ndarray | list[float] | tuple[float, ...],
               ) -> M20LowLevelDiagnostics:
         command = self._command(command)
+        if command.stop and self._stop_pose is None:
+            self._stop_pose = data.qpos[self._leg_qpos].copy()
+            self._brake_wheels = self._ctrl_target[list(WHEEL_ACTION_ACTUATORS)].copy()
         action = self._infer(self._observation(data, self._tracked_command(command)))
         self.last_action[:] = action
         self._ctrl_target[list(LEG_ACTION_ACTUATORS)] = STANCE + LEG_ACTION_SCALE * action[:12]
         self._ctrl_target[list(WHEEL_ACTION_ACTUATORS)] = WHEEL_ACTION_SCALE * action[12:]
+        if command.stop:
+            # A zero input to the locomotion network still generates wheel and
+            # leg motion. Hold the attained stance and ramp wheel targets down
+            # together; abruptly clamping only wheels destabilizes the body.
+            self._brake_wheels += np.clip(-self._brake_wheels, -0.2, 0.2)
+            self._ctrl_target[list(LEG_ACTION_ACTUATORS)] = self._stop_pose
+            self._ctrl_target[list(WHEEL_ACTION_ACTUATORS)] = self._brake_wheels
+            self.last_action[:12] = (self._stop_pose - STANCE) / LEG_ACTION_SCALE
+            self.last_action[12:] = self._brake_wheels / WHEEL_ACTION_SCALE
+        else:
+            self._stop_pose = None
         data.ctrl[:] = self._ctrl_target
 
         roll, pitch = self._attitude(data)

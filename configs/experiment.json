@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_final_model_video_baseline",
+  "stage": "s3_model_stop_authority_training_scene3_diagnostic",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_observe_production",
     "dataset": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
@@ -12,7 +12,7 @@
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s3_observe_temporal_raw_v1_from_train23",
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_observe_temporal_raw_v1_steps10000",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_final_video_21014_original_runtime_20261010",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_model_stop_authority_training_scene3_20261010",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -117,8 +117,8 @@
     }
   },
   "smolvla_evaluation": {
-    "episodes_dir": ".runtime/datasets/m20_s3_independent_heldout18_20261009_v1",
-    "episode_ids": "21014",
+    "episodes_dir": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
+    "episode_ids": "18036,18037,18038",
     "policy_steps": 9500,
     "device": "cuda",
     "seed": 20261009,
@@ -131,11 +131,13 @@
     "visual_stop_min_pixels": 80,
     "post_stop_hold_steps": 25,
     "obstacle_contact_tolerance_steps": 10,
-    "fresh_stop_confirmation": true,
+    "fresh_stop_confirmation": false,
     "checkpoint_step": 10000,
-    "episode_count": 1,
+    "episode_count": 3,
     "match_teacher_budget": false,
-    "action_replan_steps": 10
+    "action_replan_steps": 10,
+    "visual_stop_gate": false,
+    "stop_confirm": 1
   },
   "recovery_collection": {
     "episodes_dir": ".runtime/datasets/m20_s3_v8_multiroom_v1_raw",

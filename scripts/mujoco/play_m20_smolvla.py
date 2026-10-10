@@ -197,7 +197,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def executable_action(raw_action: np.ndarray, stop_threshold: float) -> np.ndarray:
-    """Clamp model output to the validated M20 body-command envelope."""
+    """Preserve signed longitudinal commands within the body-command envelope."""
     raw = np.asarray(raw_action, dtype=np.float64).reshape(-1)
     if raw.shape != (4,) or not np.isfinite(raw).all():
         raise ValueError(f"SmolVLA returned an invalid action: {raw_action!r}")
@@ -206,7 +206,7 @@ def executable_action(raw_action: np.ndarray, stop_threshold: float) -> np.ndarr
         return np.asarray((0.0, 0.0, 0.0, 1.0), dtype=np.float64)
     return np.asarray(
         (
-            np.clip(raw[0], 0.0, 0.35),
+            np.clip(raw[0], -0.35, 0.35),
             0.0,
             np.clip(raw[2], -0.15, 0.15),
             0.0,

@@ -30,6 +30,8 @@ DEFAULT_SAFETY_STOP_DISTANCE_M = 0.50
 
 # The planar LiDAR is 72 rays; 32:41 is the forward fan in the M20 frame.
 FORWARD_RAY_SLICE = slice(32, 41)
+# Angles run from -pi at index0 to pi-2pi/72. Rear is the wrapped fan.
+REAR_RAY_INDICES = np.asarray((68, 69, 70, 71, 0, 1, 2, 3, 4), dtype=np.intp)
 
 # The forward fan measures range to the nearest surface, while success is
 # measured between the *base frame* and the target centre. Measured on episode
@@ -52,14 +54,16 @@ def lidar_safety_shield(
     if scan.shape != (72,) or not np.isfinite(scan).all():
         return np.asarray((0.0, 0.0, 0.0, 1.0), dtype=np.float64), "invalid_lidar"
     safe = np.asarray(command, dtype=np.float64).copy()
-    if safe[3] > 0.5 or safe[0] <= 0.0:
+    if safe[3] > 0.5 or safe[0] == 0.0:
         return safe, "none"
-    front = float(np.min(scan[FORWARD_RAY_SLICE]))
-    if front <= stop_distance:
+    reverse = bool(safe[0] < 0.0)
+    clearance = float(np.min(scan[REAR_RAY_INDICES] if reverse else scan[FORWARD_RAY_SLICE]))
+    if clearance <= stop_distance:
         return np.asarray((0.0, 0.0, 0.0, 1.0), dtype=np.float64), "emergency_stop"
-    if front < slow_distance:
-        ratio = (front - stop_distance) / max(1.0e-6, slow_distance - stop_distance)
-        safe[0] = min(float(safe[0]), 0.04 + 0.08 * float(np.clip(ratio, 0.0, 1.0)))
+    if clearance < slow_distance:
+        ratio = (clearance - stop_distance) / max(1.0e-6, slow_distance - stop_distance)
+        magnitude = min(abs(float(safe[0])), 0.04 + 0.08 * float(np.clip(ratio, 0.0, 1.0)))
+        safe[0] = -magnitude if reverse else magnitude
         return safe, "slow"
     return safe, "none"
 
