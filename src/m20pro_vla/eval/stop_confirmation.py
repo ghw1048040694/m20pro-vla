@@ -46,9 +46,10 @@ class ActionQueueFreshener:
 
 
 class StopConfirmation:
-    def __init__(self, *, required_votes: int, require_fresh: bool):
+    def __init__(self, *, required_votes: int, require_fresh: bool, reversible: bool = False):
         if required_votes <= 0:
             raise ValueError('Stop confirmation requires positive vote count')
+        self.reversible = bool(reversible)
         self.required_votes = required_votes
         self.require_fresh = require_fresh
         self.votes = 0
@@ -57,9 +58,10 @@ class StopConfirmation:
 
     def resolve(self, desired: np.ndarray, previous: np.ndarray, *,
                 visual_evidence: bool, prediction_fresh: bool) -> np.ndarray:
-        if self.latched:
+        if self.latched and not (self.reversible and desired[3] <= .5):
             return np.asarray((0., 0., 0., 1.))
         if desired[3] <= .5:
+            self.latched = False
             self.votes = 0
             self.pending = False
             return desired.copy()

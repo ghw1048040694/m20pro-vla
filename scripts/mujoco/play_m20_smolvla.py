@@ -36,6 +36,7 @@ from m20pro_vla.eval.acceptance import (
     count_successes_by_contact_tolerance,
     resolve_policy_step_budget,
     terminate_after_stop,
+    terminal_stop_step,
 )
 from m20pro_vla.eval.stop_confirmation import ActionQueueFreshener, StopConfirmation
 from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
@@ -155,6 +156,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Defaults to smolvla_evaluation.max_yaw_delta in the acceptance config.",
     )
+    parser.add_argument("--reversible-stop", action=argparse.BooleanOptionalAction, default=None,
+        help="Allow model movement after a stop; keep observing to the episode budget. Stop is not a task-complete signal.")
     parser.add_argument("--stop-threshold", type=float, default=0.5)
     parser.add_argument("--stop-confirm", type=int, default=3)
     parser.add_argument(
@@ -353,7 +356,10 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
     stop_step = -1
     fresh_stop_confirmation = bool(getattr(args, 'fresh_stop_confirmation', False))
     action_freshener = ActionQueueFreshener(fresh_stop_confirmation)
-    stop_confirmation = StopConfirmation(required_votes=args.stop_confirm, require_fresh=fresh_stop_confirmation)
+    reversible_stop = bool(getattr(args, "reversible_stop", False))
+    stop_event_count = 0
+    resume_event_count = 0
+    stop_confirmation = StopConfirmation(required_votes=args.stop_confirm, require_fresh=fresh_stop_confirmation, reversible=reversible_stop)
     # Steps actually simulated. Equals ``policy_step_budget`` unless the episode
     # ends early on a latched stop; logged so the size of the unattended tail the
     # old run-to-budget behaviour produced stays visible.
@@ -452,6 +458,10 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             stop_votes = stop_confirmation.votes
             if stop_confirmation.latched and not stop_latched:
                 stop_step = step
+                stop_event_count += 1
+            elif stop_latched and not stop_confirmation.latched:
+                stop_step = -1
+                resume_event_count += 1
             stop_latched = stop_confirmation.latched
             command = smooth_body_command(
                 previous_command,
@@ -546,12 +556,9 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 writer.stdin.write(demo_renderer.render().copy().tobytes())
             if args.progress_interval and step % args.progress_interval == 0:
                 print(json.dumps({"step": step, "distance": distance, "action": command.tolist()}), flush=True)
-            # The latched stop is a decision, not a checkpoint: end the episode on
-            # it (after a short settle window) exactly as the teacher episode ends,
-            # instead of standing on a zero-velocity command until the budget runs
-            # out. Every extra step can only hurt the whole-episode attitude and
-            # contact criteria.
-            if terminate_after_stop(
+            # Legacy terminal stops end after settling. Reversible pauses keep
+            # perception and inference alive, including across a long stop.
+            if not reversible_stop and terminate_after_stop(
                 stop_latched=stop_latched,
                 stop_step=stop_step,
                 step=step,
@@ -581,6 +588,15 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
     contact_tolerance = max(
         0, int(getattr(args, "obstacle_contact_tolerance_steps", 0) or 0)
     )
+    # A temporary pause must not count as completing an episode. In reversible
+    # mode, judge the final settled stop and final position, without feeding
+    # privileged target distance back into the policy or termination logic.
+    active_stop_step = stop_step
+    stop_step = terminal_stop_step(stop_step=stop_step, stop_active=stop_latched,
+        steps_executed=len(executed_actions), hold_steps=args.post_stop_hold_steps,
+        reversible=reversible_stop)
+    terminal_stop_held = bool(stop_step >= 0 and stop_latched and
+        len(executed_actions) - active_stop_step - 1 >= max(0, args.post_stop_hold_steps))
     criteria = build_criteria(
         target_first_visible_step=target_first_visible_step,
         target_reached_step=target_reached_step,
@@ -589,6 +605,8 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         obstacle_contact_step_count=obstacle_contact_step_count,
         obstacle_contact_tolerance_steps=contact_tolerance,
     )
+    if reversible_stop:
+        criteria["reached_radius"] = bool(target_reached_step >= 0 and distance <= args.success_radius)
     report = {
         "schema": "m20pro_smolvla_closed_loop_v1",
         "checkpoint": str(args.checkpoint),
@@ -611,6 +629,13 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         "sim_steps_per_action": int(args.sim_steps_per_action),
         "action_replan_steps": int(args.action_replan_steps),
         "fresh_stop_confirmation": fresh_stop_confirmation,
+        "reversible_stop": reversible_stop,
+        "stop_event_count": stop_event_count,
+        "resume_event_count": resume_event_count,
+        "active_stop_step": int(active_stop_step),
+        "terminal_stop_held": terminal_stop_held,
+        "final_target_distance": float(distance),
+        "task_complete_signal_available": False,
         "forced_stop_replan_count": sum(int(row['forced_replan']) for row in trace_rows),
         "safety_shield": bool(args.safety_shield),
         "safety_stop_distance": float(args.safety_stop_distance),
@@ -625,7 +650,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         "policy_input": ["observation.images.front", "observation.images.rear", "observation.state", "task"],
         "prohibited_policy_input": ["target_xy", "object_id", "semantic_mask", "privileged_bearing"],
         "success": bool(
-            target_reached_step >= 0
+            criteria["reached_radius"]
             and stop_step >= 0
             and stable
             and obstacle_contact_step_count <= contact_tolerance

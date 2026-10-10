@@ -48,6 +48,7 @@ CONTACT_TOLERANT_CORE_CRITERIA: tuple[str, ...] = (
 # (argparse attribute, acceptance-config key, cast, module fallback)
 EVALUATION_KNOBS: tuple[tuple[str, str, type, float | int], ...] = (
     ("fresh_stop_confirmation", "fresh_stop_confirmation", bool, False),
+    ("reversible_stop", "reversible_stop", bool, False),
     ("policy_steps", "policy_steps", int, DEFAULT_POLICY_STEPS),
     ("success_radius", "success_radius", float, DEFAULT_SUCCESS_RADIUS_M),
     ("safety_stop_distance", "safety_stop_distance", float, DEFAULT_SAFETY_STOP_DISTANCE_M),
@@ -255,3 +256,13 @@ __all__ = [
     "resolve_policy_step_budget",
     "terminate_after_stop",
 ]
+
+
+def terminal_stop_step(*, stop_step: int, stop_active: bool, steps_executed: int,
+                       hold_steps: int, reversible: bool) -> int:
+    """Credit only the final held stop when movement can resume."""
+    if not reversible:
+        return stop_step
+    if not stop_active or stop_step < 0:
+        return -1
+    return stop_step if steps_executed - stop_step - 1 >= max(0, hold_steps) else -1
