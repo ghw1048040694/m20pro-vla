@@ -1,0 +1,31 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M20 专家示范录制</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10151c;color:#edf2f7;font:16px system-ui,"Microsoft YaHei",sans-serif}main{max-width:1150px;margin:0 auto;padding:25px}h1{font-size:26px;margin:0 0 8px}.muted{color:#a4b2c3}#task{font-size:23px;color:#a5edb8;margin:20px 0}.views{display:grid;grid-template-columns:1fr 1fr;gap:18px}figure{margin:0;padding:12px;background:#1b2532;border-radius:12px}figcaption{margin-bottom:10px}img{width:100%;aspect-ratio:5/3;image-rendering:auto;display:block;background:#070a0d}button{border:1px solid #526276;border-radius:8px;padding:12px 18px;color:white;background:#273747;font:inherit;cursor:pointer}button:disabled{opacity:.35;cursor:default}.primary{background:#216340}.danger{background:#6d3038}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}#keyboard{padding:18px;border:2px solid #526276;border-radius:12px;outline:none;background:#18212c}#keyboard:focus{border-color:#7ed69b}kbd{background:#344459;padding:4px 9px;border-radius:4px;margin-right:5px}.pill{padding:5px 12px;background:#28384a;border-radius:20px}#message{color:#ffce89;min-height:25px}#history{line-height:1.8;font-size:14px}#telemetry{font-variant-numeric:tabular-nums}.help{line-height:2}@media(max-width:700px){.views{grid-template-columns:1fr}main{padding:15px}}
+</style></head><body><main>
+<h1>M20 · 键盘专家示范</h1><div class="muted">你负责搜索、选路和停车。现有 v8 执行身体命令；示范独立保存，等待复核。</div>
+<div id="task">正在载入相机…</div><div class="views"><figure><figcaption>前相机</figcaption><img id="front" alt="机器狗前相机实时画面"></figure><figure><figcaption>后相机</figcaption><img id="rear" alt="机器狗后相机实时画面"></figure></div>
+<div class="row"><span id="mode" class="pill">连接中</span><span id="telemetry"></span></div>
+<div class="row"><button id="start" class="primary">开始录制</button><button id="save">完成并保存</button><button id="retry">重录本任务</button><button id="next">换任务</button></div>
+<div id="keyboard" tabindex="0" role="application" aria-label="键盘驾驶区域，点击后使用WASD控制">
+<b id="focus">点击这里启用键盘控制</b><div class="help"><kbd>W</kbd>前进 <kbd>S</kbd>后退 <kbd>A</kbd>左转 <kbd>D</kbd>右转 <kbd>空格</kbd>停车<br>
+按住 <kbd>Shift</kbd> 加速直行 · 松开方向键停车 · 停车后再按方向键可继续走<br>
+W/S + A/D 为慢速小转；单独 A/D 原地大转。相机失焦或控制信号中断会停车。</div></div>
+<div class="row muted">找到目标后松键，稳定停车至少 1 秒，再点“完成并保存”。重录和失败数据也会保留，不会自动入训练。</div>
+<div id="message" role="status"></div><div id="history"></div><div class="row"><button id="shutdown" class="danger">结束录制会话</button></div>
+</main><script>
+const token='__TOKEN__',client=crypto.randomUUID(), keys=new Set(), box=document.querySelector('#keyboard');
+let mode='loading',inflight=false,alive=true;
+const labels={loading:'载入中',ready:'待录制',recording:'正在录制',saving:'正在保存',saved:'已保存',error:'错误'};
+async function post(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,client,...body})});const result=await r.json();if(!r.ok)throw Error(result.error);return result;}
+function clear(){keys.clear();navigator.sendBeacon('/api/input',new Blob([JSON.stringify({token,client,keys:[]})],{type:'application/json'}));}
+box.addEventListener('keydown',e=>{if(['KeyW','KeyS','KeyA','KeyD','ShiftLeft','ShiftRight','Space'].includes(e.code)){e.preventDefault();keys.add(e.code)}});
+box.addEventListener('keyup',e=>{keys.delete(e.code);if(e.code==='Space')e.preventDefault()});
+box.addEventListener('focus',()=>document.querySelector('#focus').textContent='键盘已启用 · 按住方向键行驶');
+box.addEventListener('blur',()=>{clear();document.querySelector('#focus').textContent='点击这里启用键盘控制'});
+window.addEventListener('blur',clear);document.addEventListener('visibilitychange',()=>{if(document.hidden)clear()});window.addEventListener('pagehide',clear);
+setInterval(async()=>{if(inflight||!alive||mode!=='recording'||document.activeElement!==box)return;inflight=true;try{await post('/api/input',{keys:[...keys]})}catch(e){document.querySelector('#message').textContent=e.message}finally{inflight=false}},50);
+for(const op of ['start','save','retry','next','shutdown'])document.querySelector('#'+op).onclick=async()=>{clear();try{await post('/api/operation',{operation:op});if(op==='start')box.focus();if(op==='shutdown'){alive=false;document.querySelector('#message').textContent='录制会话已结束，数据已保留。'}}catch(e){document.querySelector('#message').textContent=e.message}};
+async function status(){if(!alive)return;try{const s=await(await fetch('/api/status')).json();mode=s.mode;document.querySelector('#mode').textContent=labels[mode]||mode;document.querySelector('#task').textContent=s.task?`任务 ${s.task_number}/${s.task_count}：${s.task}`:'正在载入场景…';const a=s.action||[0,0,0,1];document.querySelector('#telemetry').textContent=`${s.sim_seconds||0} 秒仿真 · 实际 ${s.measured_fps||0}/50 帧/秒 · 速度 ${s.speed_mps||0} m/s · 执行前进 ${a[0].toFixed(2)} / 转向 ${a[2].toFixed(2)}`;document.querySelector('#start').disabled=!['ready','saved'].includes(mode);document.querySelector('#save').disabled=mode!=='recording';for(const id of ['retry','next'])document.querySelector('#'+id).disabled=['loading','saving','error'].includes(mode);document.querySelector('#message').textContent=s.error||(s.shield==='emergency_stop'?'前进或后退方向有近障碍，基础保护停车。':s.shield==='slow'?'靠近障碍，基础保护正在减速。':'');document.querySelector('#history').textContent=(s.saved||[]).map(r=>`${r.id} · ${r.steps} 帧 · ${r.disposition==='operator_complete'?'已保存':'保留的重录/未完成记录'} · ${r.review_passed?'物理任务初审通过':'待复核'}`).join('\n')}catch(e){document.querySelector('#message').textContent='连接中断；未收到输入时机器狗会停车。'}setTimeout(status,150)}
+for(const name of ['front','rear']){const img=document.querySelector('#'+name);let timer;function refresh(){if(alive)img.src=`/camera/${name}.jpg?t=${Date.now()}`}img.onload=()=>{timer=setTimeout(refresh,50)};img.onerror=()=>{timer=setTimeout(refresh,500)};refresh()}
+status();
+</script></body></html>

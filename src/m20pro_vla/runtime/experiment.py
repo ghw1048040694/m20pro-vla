@@ -140,6 +140,7 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
                 "output_already_exists": lerobot_dataset.exists(),
             }} if smolvla_backend != 'raw' else {}),
             "collect": {"workflow": "collect", "args": experiment_stage_args(config, "collect")},
+            "teleop-record": {"settings": config.get("teleoperation", {}), "training_ready": False},
             "curate": {
                 "source": str(paths.get("raw_dataset", paths["dataset"])),
                 "recovery": str(paths["recovery_dataset"]),

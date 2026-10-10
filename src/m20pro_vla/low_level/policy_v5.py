@@ -148,12 +148,16 @@ class M20V5PolicyController(M20LowLevelController):
 
     def __init__(self, model: mujoco.MjModel, onnx_path: str | Path | None = None,
                  providers: tuple[str, ...] = ("CPUExecutionProvider",),
-                 teacher_motion_limits: tuple[float, float] | None = None):
+                 teacher_motion_limits: tuple[float, float] | None = None,
+                 inference_threads: int | None = None):
         super().__init__(model)
         if teacher_motion_limits is not None:
             if tuple(teacher_motion_limits) != (.50, .40):
                 raise ValueError('Only the explicitly validated teacher .50/.40 profile is supported')
         self.teacher_motion_limits = teacher_motion_limits
+        if inference_threads is not None and inference_threads < 1:
+            raise ValueError("inference_threads must be positive")
+        self.inference_threads = inference_threads
         self._joint_id = {
             name: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
             for name in ACTION_JOINT_NAMES
@@ -227,7 +231,12 @@ class M20V5PolicyController(M20LowLevelController):
                 f"{ONNX_PATH_ENV}."
             )
         self.onnx_path = path
-        self._session = ort.InferenceSession(str(path), providers=list(self._providers))
+        options = None
+        if self.inference_threads is not None:
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = self.inference_threads
+            options.inter_op_num_threads = 1
+        self._session = ort.InferenceSession(str(path), sess_options=options, providers=list(self._providers))
         inputs = self._session.get_inputs()
         if len(inputs) != 1 or inputs[0].shape[-1] != OBSERVATION_SIZE:
             raise RuntimeError(

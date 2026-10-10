@@ -92,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "plan",
             "collect",
+            "teleop-record",
             "curate",
             "audit",
             "convert",
@@ -414,6 +415,12 @@ def command_experiment(args: argparse.Namespace) -> int:
             {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
         )
         assert context is not None
+        if stage == "teleop-record":
+            os.environ.update(load_experiment_config(args.config)["teleoperation"].get("render_environment", {}))
+            from .sim.keyboard_teleop import run_keyboard_recorder
+
+            report = run_keyboard_recorder(load_experiment_config(args.config), context.path)
+            return _finish(context, True, report, compact=args.json)
         if stage == "train-smolvla":
             from .training import run_smolvla_training
 

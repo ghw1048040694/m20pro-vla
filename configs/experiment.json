@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_responsive_teacher_pilot3_quarantine",
+  "stage": "s3_human_keyboard_demonstration_quarantine",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
@@ -191,5 +191,24 @@
     "policy_onnx": ".runtime/policies/m20_flat_v8/policy_single.onnx",
     "policy_version": "v8",
     "nominal_mujoco_friction": 0.6
+  },
+  "teleoperation": {
+    "port": 8765,
+    "source_dir": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
+    "source_episode_ids": [
+      18038,
+      18036,
+      18037
+    ],
+    "max_steps": 19000,
+    "output_dir": ".runtime/datasets/m20_s3_human_keyboard_quarantine_20261010",
+    "action_contract": "m20_human_keyboard_physical_v1",
+    "training_ready": false,
+    "render_profile": "interactive-v1",
+    "render_environment": {
+      "MUJOCO_GL": "egl",
+      "LIBGL_ALWAYS_SOFTWARE": "1",
+      "GALLIUM_DRIVER": "llvmpipe"
+    }
   }
 }
