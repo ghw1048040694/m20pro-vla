@@ -1,14 +1,14 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_reversible_stop_training_green_diagnostic",
+  "stage": "s3_responsive_teacher_pilot3_quarantine",
   "paths": {
-    "raw_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_observe_production",
+    "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
     "checkpoint_dir": ".runtime/checkpoints/m20_s3_v8_multiroom_v1",
     "init_checkpoint": ".runtime/checkpoints/m20_standard_v1_balanced_v7/best.pt",
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
-    "collection_videos": ".runtime/videos/m20_s3_v8_multiroom_v1_observe_production",
+    "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s3_observe_temporal_raw_v1_from_train23",
     "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_observe_temporal_raw_v1_steps10000",
@@ -18,7 +18,7 @@
   },
   "collection": {
     "mode": "search",
-    "layouts": 12,
+    "layouts": 1,
     "layout_offset": 6012,
     "steps": 19000,
     "search_start_mode": "balanced",
@@ -28,7 +28,7 @@
     "language_mode": "varied",
     "policy_width": 160,
     "policy_height": 96,
-    "video": false,
+    "video": true,
     "quality_min_base_height_m": 0.45,
     "quality_max_abs_roll_deg": 8.0,
     "quality_max_abs_pitch_deg": 8.0,
@@ -42,11 +42,12 @@
     "quality_max_obstacle_contact_steps": 0,
     "structured_start_mode": "hidden",
     "seed": 20261008,
-    "skip_existing": true,
     "s3_room_assignment": "balanced-permutations",
     "s3_search_teacher": "observe-then-route",
     "s3_discovery_handoff": "interior-center",
-    "s3_scan_anchor": "interior-center"
+    "s3_scan_anchor": "interior-center",
+    "s3_motion_profile": "responsive-v1",
+    "video_view": "third_person"
   },
   "environment": {
     "require_wsl2": true,

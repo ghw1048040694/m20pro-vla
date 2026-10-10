@@ -34,6 +34,7 @@ from m20pro_vla.low_level import M20LowLevelController, build_low_level_controll
 from m20pro_vla.data.visibility import target_pixel_count
 from m20pro_vla.planning.room_search import RoomSearchSchedule
 from m20pro_vla.planning.room_route import RoomSearchRoutePlanner
+from m20pro_vla.planning.teacher_motion import ResponsiveTeacherMotion, MOTION_CONTRACT
 from m20pro_vla.planning import (
     GlobalPlanner,
     GlobalPlannerConfig,
@@ -83,7 +84,8 @@ def _room_search_schedule_for_plan(args, plan):
     return RoomSearchSchedule(plan.search_room_centers,
         safe_handoff_bounds=(plan.search_room_bounds
             if getattr(args, 's3_discovery_handoff', 'direct') == 'interior-center' else ()),
-        scan_start_radius=(.25 if getattr(args, 's3_scan_anchor', 'legacy') == 'interior-center' else None))
+        scan_start_radius=(.25 if getattr(args, 's3_scan_anchor', 'legacy') == 'interior-center' else None),
+        sweep_radians=(2 * math.pi if getattr(args, 's3_motion_profile', 'legacy') == 'responsive-v1' else math.pi + .2))
 
 
 SEARCH_LAYOUT_TEMPLATES = (
@@ -307,6 +309,8 @@ def parse_args() -> argparse.Namespace:
         "--s3-scan-anchor", choices=("legacy", "interior-center"), default="legacy",
         help="Observation teacher only: enter the room center within .25 m before starting a scan.",
     )
+    parser.add_argument('--s3-motion-profile', choices=('legacy', 'responsive-v1'), default='legacy',
+                        help='Teacher-only explicit .50 m/s/.40 rad/s sequential motion and lidar retreat. New physical action contract; quarantine before learner normalization adaptation.')
     parser.add_argument("--episodes", type=int, default=24)
     parser.add_argument(
         "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
@@ -1214,6 +1218,10 @@ def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
         args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
     ):
         raise ValueError("Interior scan anchor requires the S3 observation teacher")
+    if getattr(args, 's3_motion_profile', 'legacy') != 'legacy' and (
+            args.scene != 's3' or getattr(args, 's3_search_teacher', '') != 'observe-then-route'
+            or getattr(args, 'metadata_only', False)):
+        raise ValueError('Responsive motion requires real RGB S3 observation teacher')
     visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
     if visible_approach and args.scene != "s2":
         raise ValueError("--structured-start-mode visible-approach requires --scene s2")
@@ -1462,7 +1470,10 @@ def main() -> None:
             for obstacle in plan.obstacles
         }
         obstacle_geom_ids.discard(-1)
-        controller = build_low_level_controller(model)
+        responsive = args.s3_motion_profile == 'responsive-v1'
+        controller = build_low_level_controller(model, **({'teacher_motion_limits': (.50, .40)} if responsive else {}))
+        motion_teacher = ResponsiveTeacherMotion() if responsive else None
+        motion_trace = []
         controller.reset(data, plan.yaw, plan.start_xy)
         structured = plan.scene_kind in {"s2", "s3"}
         effective_search_policy = ""
@@ -1616,6 +1627,13 @@ def main() -> None:
                             bearing=bearing,
                         )
                 if step >= args.warmup_steps:
+                    if motion_teacher is not None:
+                        expert, motion_info = motion_teacher.command(
+                            expert, xy=base_xy, yaw=base_yaw,
+                            local_goal=planner_info.get('planning_goal', search_planner.target_xy),
+                            lidar=planar_lidar(model, data),
+                            scan=search_decision is not None and search_decision['mode'] == 'scan')
+                        motion_trace.append(motion_info)
                     min_distance = min(min_distance, distance)
                     min_height = min(min_height, float(data.qpos[2]))
                     w, x, y, z = (float(value) for value in data.qpos[3:7])
@@ -1686,6 +1704,13 @@ def main() -> None:
                         obstacle_contact_names.update(contacts)
                     if room_search is not None:
                         teacher_trace[-1] += (*data.qpos[:2], len(contacts))
+                    if responsive and collected_steps % 250 == 0:
+                        print(json.dumps({'teacher_motion_progress': dict(
+                            episode_id=plan.episode_id, step=collected_steps,
+                            phase=motion_info['phase'], action=expert.tolist(),
+                            xy=data.qpos[:2].tolist(), target_distance=distance,
+                            discovered=room_search.discovered,
+                            pixels=observed_pixels, contact_steps=obstacle_contact_steps)}), flush=True)
                 if (
                     args.mode == "search"
                     and args.search_stop_after_success
@@ -1722,6 +1747,11 @@ def main() -> None:
             "collection_mode": args.mode,
             "search_policy": effective_search_policy if args.mode == "search" else "",
             "search_policy_requested": args.search_policy if args.mode == "search" else "",
+            "teacher_motion_profile": args.s3_motion_profile,
+            "action_contract": MOTION_CONTRACT if responsive else 'm20_body_command_legacy',
+            "training_ready": False if responsive else None,
+            "teacher_motion_recovery_count": motion_teacher.recovery_count if motion_teacher is not None else 0,
+            "teacher_scan_sweep_radians": room_search.sweep_radians if room_search is not None else None,
             "search_policy_effective": effective_search_policy if args.mode == "search" else "",
             "layout_id": plan.layout_id,
             "terrain_profile": plan.terrain_profile,
@@ -1921,7 +1951,16 @@ def main() -> None:
                 np.savez_compressed(discovery_path, step=indices,
                                     front_rgb=front[indices], rear_rgb=rear[indices])
                 metadata['teacher_discovery_rgb_diagnostic'] = str(discovery_path)
+        if motion_trace:
+            motion_path = args.output_dir / f"teacher_motion_{plan.episode_id:04d}.npz"
+            np.savez_compressed(motion_path, **{key: np.asarray([row[key] for row in motion_trace]) for key in motion_trace[0]})
+            metadata['teacher_motion_trace_diagnostic_only'] = str(motion_path)
         if not metadata["quality_passed"]:
+            if responsive and collect_arrays:
+                diagnostic_path = args.output_dir / f"rejected_rgb_{plan.episode_id:04d}.npz"
+                np.savez_compressed(diagnostic_path, front_rgb=front[:collected_steps], rear_rgb=rear[:collected_steps],
+                                    lidar=lidar[:collected_steps], proprio=proprio[:collected_steps], action=action[:collected_steps])
+                metadata['rejected_full_rgb_diagnostic_only'] = str(diagnostic_path)
             rejected_summaries.append(metadata)
             rejected_metadata_path.write_text(
                 json.dumps(metadata, indent=2) + "\n",
@@ -1931,8 +1970,9 @@ def main() -> None:
                 out.unlink(missing_ok=True)
                 episode_metadata_path.unlink(missing_ok=True)
             print(json.dumps({"rejected_episode": metadata}, ensure_ascii=False), flush=True)
-            video_path.unlink(missing_ok=True)
-            scene_path.unlink(missing_ok=True)
+            if not responsive:
+                video_path.unlink(missing_ok=True)
+                scene_path.unlink(missing_ok=True)
             continue
         episode_metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         rejected_metadata_path.unlink(missing_ok=True)

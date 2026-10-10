@@ -147,8 +147,13 @@ class M20V5PolicyController(M20LowLevelController):
     lateral_supported = False
 
     def __init__(self, model: mujoco.MjModel, onnx_path: str | Path | None = None,
-                 providers: tuple[str, ...] = ("CPUExecutionProvider",)):
+                 providers: tuple[str, ...] = ("CPUExecutionProvider",),
+                 teacher_motion_limits: tuple[float, float] | None = None):
         super().__init__(model)
+        if teacher_motion_limits is not None:
+            if tuple(teacher_motion_limits) != (.50, .40):
+                raise ValueError('Only the explicitly validated teacher .50/.40 profile is supported')
+        self.teacher_motion_limits = teacher_motion_limits
         self._joint_id = {
             name: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
             for name in ACTION_JOINT_NAMES
@@ -185,6 +190,13 @@ class M20V5PolicyController(M20LowLevelController):
         self._providers = tuple(providers)
         self._stop_pose = None
         self._brake_wheels = np.zeros(4, dtype=np.float64)
+
+    def _command(self, command):
+        if getattr(self, 'teacher_motion_limits', None) is None:
+            return super()._command(command)
+        c = command if isinstance(command, M20BodyCommand) else M20BodyCommand.from_array(command)
+        return M20BodyCommand(float(np.clip(c.forward, -.50, .50)), 0.,
+                              float(np.clip(c.yaw, -.40, .40)), c.stop)
 
     @staticmethod
     def _verify_actuator_order(model: mujoco.MjModel) -> None:
