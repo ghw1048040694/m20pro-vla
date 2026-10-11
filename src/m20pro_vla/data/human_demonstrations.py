@@ -2,7 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
-from .execution_contract import HUMAN_CONTRACT, load_execution_contract
+from .execution_contract import HUMAN_CONTRACT, HUMAN_STOP_SUPPORT_CONTRACT, load_execution_contract, validate_execution_contract
 
 
 def reviewed_human_source(directory):
@@ -10,7 +10,8 @@ def reviewed_human_source(directory):
     manifest=json.loads((directory/'manifest.json').read_text())
     if manifest['schema']!='m20_reviewed_human_raw_v1' or manifest['heldout_included']:
         raise ValueError('Expected reviewed human training data, excluding heldout')
-    if load_execution_contract(directory)!=HUMAN_CONTRACT:
+    execution=load_execution_contract(directory)
+    if execution not in (HUMAN_CONTRACT,HUMAN_STOP_SUPPORT_CONTRACT) or manifest['action_contract']!=execution:
         raise ValueError('Human source has no matching physical execution contract')
     records=manifest['records']
     if not records or len({r['episode_id'] for r in records})!=len(records):
@@ -26,6 +27,13 @@ def reviewed_human_source(directory):
                 or m['source_recording_id']!=r['source_recording_id']):
             raise ValueError('Human source provenance differs')
         review=m['human_review']
+        if m.get('execution_contract')!=execution:
+            raise ValueError('Selected human metadata execution contract differs')
+        recorded=validate_execution_contract(m.get('recorded_execution_contract',execution))
+        if recorded!=execution and not (
+                execution==HUMAN_STOP_SUPPORT_CONTRACT and recorded==HUMAN_CONTRACT
+                and manifest.get('recorded_v1_stop_support_upgrade') is True):
+            raise ValueError('Human source requires an explicit compatible stop-support upgrade')
         if review['actual_contact_steps']!=0 or review['terminal_stop_steps']<20 or review['final_distance']>.95:
             raise ValueError('Human demonstration did not pass its recorded task review')
     if len(list(directory.glob('episode_*.npz')))!=len(records):
