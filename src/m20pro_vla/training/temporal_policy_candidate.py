@@ -81,6 +81,10 @@ def temporal_policy_class(base_policy_class):
             if binary is not None:
                 from .binary_stop import validate_binary_stop_spec
                 (Path(directory)/'m20_binary_stop.json').write_text(json.dumps(validate_binary_stop_spec(binary), indent=2)+'\n')
+            decoding = getattr(self.model, 'stop_decoding_spec', None)
+            if decoding is not None:
+                from .stop_decoding import save_stop_decoding
+                save_stop_decoding(directory, decoding, binary)
             execution = getattr(self, 'execution_contract', None)
             if execution is not None:
                 from ..data.execution_contract import save_execution_contract
@@ -134,5 +138,11 @@ def temporal_policy_class(base_policy_class):
                     raise ValueError('Binary STOP requires the explicit physical flow objective')
                 if head_init.exists():
                     policy.model.enable_binary_stop(binary)
+            from .stop_decoding import load_stop_decoding
+            decoding = load_stop_decoding(directory, binary)
+            if decoding is not None:
+                if head_init.exists():
+                    raise ValueError('Runtime STOP decoding requires a saved trained binary head')
+                policy.model.stop_decoding_spec = decoding
             return policy
     return TemporalPolicyCandidate

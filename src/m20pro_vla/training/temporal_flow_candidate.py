@@ -22,6 +22,7 @@ class TemporalFlowCoreCandidate(nn.Module):
         self.spec = spec
         self.binary_stop_spec = None
         self.binary_stop_head = None
+        self.stop_decoding_spec = None
         self.last_stop_logits = None
 
     def contract(self):
@@ -221,4 +222,6 @@ class TemporalFlowCoreCandidate(nn.Module):
         self._require_binary_stop_capture(capture, state.shape[0])
         # Only the saved normalized STOP column changes. Original flow noise,
         # dimensions, motion columns and sampling loop remain untouched.
-        return replace_stop_column(actions, self.last_stop_logits, self.binary_stop_spec)
+        from .stop_decoding import decoded_stop_logits
+        logits = decoded_stop_logits(self.last_stop_logits, self.stop_decoding_spec, self.binary_stop_spec)
+        return replace_stop_column(actions, logits, self.binary_stop_spec)
