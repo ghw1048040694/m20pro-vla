@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_current_observation_stop_decoding_red_green_diagnostic",
+  "stage": "s3_human_fp32_master_bounded_fit600",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_reviewed7_with_corrections_v2_20261011",
@@ -10,9 +10,9 @@
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
-    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_visual_language_stop_from_human600_20261011",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_visual_language_stop_current_decoding_20261011",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_current_stop_decoding_red_green_20261011",
+    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_fp32_master_from_human600_20261011",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_fp32_master_fit600_20261011",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_fp32_master_training3_20261011",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -164,6 +164,14 @@
     "binary_stop": {
       "schema": "m20_visual_language_binary_stop_v2",
       "initialize": true
+    },
+    "optimizer_precision": {
+      "schema": "m20_fp32_master_adamw_v1",
+      "optimizer": "adamw",
+      "forward_weights": "original_dtype",
+      "master_weights": "float32",
+      "moments": "float32",
+      "rounded_copy": "after_each_optimizer_step"
     }
   },
   "smolvla_evaluation": {
@@ -374,5 +382,5 @@
       }
     ]
   },
-  "pipeline_stage": "s3_current_observation_stop_decoding_red_green_diagnostic"
+  "pipeline_stage": "s3_human_fp32_master_bounded_fit600"
 }

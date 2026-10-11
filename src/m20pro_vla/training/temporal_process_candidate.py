@@ -14,16 +14,17 @@ TEMPORAL_SETTINGS_ENV = 'M20PRO_TEMPORAL_TRAINING_SPEC'
 CONTRACT_FILE = 'm20_temporal_training_contract.json'
 
 
-def temporal_process_contract(dataset, objective=None, binary_stop=None):
+def temporal_process_contract(dataset, objective=None, binary_stop=None, optimizer_precision=None):
     from .raw_smolvla import raw_training_contract
     package = Path(__file__).resolve().parents[1]
     paths = ('data/raw_dataset.py', 'data/temporal_raw_candidate.py', 'data/temporal_rgb.py',
              'training/raw_smolvla.py', 'training/temporal_process_candidate.py',
              'training/temporal_factory_candidate.py', 'training/temporal_policy_candidate.py',
              'training/temporal_flow_candidate.py', 'training/visual_prefix_identity.py',
-             'training/temporal_rgb.py', 'training/physical_flow_loss.py', 'training/binary_stop.py')
+             'training/temporal_rgb.py', 'training/physical_flow_loss.py', 'training/binary_stop.py',
+             'training/optimizer_precision.py')
     return dict(schema='m20_temporal_process_candidate_v1',
-        raw=raw_training_contract(dataset.dataset), sampling=dataset.sampling_contract(), training_objective=objective, binary_stop=binary_stop,
+        raw=raw_training_contract(dataset.dataset), sampling=dataset.sampling_contract(), training_objective=objective, binary_stop=binary_stop, optimizer_precision=optimizer_precision,
         adapter_sha256={p:hashlib.sha256((package/p).read_bytes()).hexdigest() for p in paths})
 
 
@@ -39,6 +40,7 @@ def temporal_process_hooks(official, settings, spec):
         raise ValueError('Temporal process requires three slots at 25Hz')
     original_dataset, original_policy = official.make_dataset, official.make_policy
     selected = {}
+    original_optimizer = getattr(official, 'make_optimizer_and_scheduler', None)
 
     def dataset_factory(cfg):
         if cfg.policy.type != 'smolvla' or cfg.policy.use_peft or getattr(cfg,'peft',None) is not None:
@@ -60,7 +62,9 @@ def temporal_process_hooks(official, settings, spec):
             if candidates:
                 from .binary_stop import validate_binary_stop_spec
                 binary_stop = validate_binary_stop_spec(json.loads(candidates[0].read_text()))
-        contract = temporal_process_contract(dataset, objective, binary_stop)
+        from .optimizer_precision import load_precision_spec
+        precision = load_precision_spec(cfg.policy.pretrained_path) if cfg.policy.pretrained_path else None
+        contract = temporal_process_contract(dataset, objective, binary_stop, precision)
         if cfg.resume:
             if not path.is_file() or json.loads(path.read_text()) != contract:
                 raise ValueError('Temporal source/sampling/adapter differs from saved run')
@@ -77,6 +81,17 @@ def temporal_process_hooks(official, settings, spec):
         return make_temporal_policy_candidate(original_policy,cfg,selected['dataset'],
             require_temporal_contract=selected['config'].resume)
 
+    def optimizer_factory(cfg, policy):
+        if getattr(policy, 'optimizer_precision', None) is None:
+            return original_optimizer(cfg, policy)
+        from .optimizer_precision import make_precision_optimizer_and_scheduler
+        return make_precision_optimizer_and_scheduler(cfg, policy)
+
     official.make_dataset, official.make_policy = dataset_factory, policy_factory
+    if original_optimizer is not None:
+        official.make_optimizer_and_scheduler = optimizer_factory
     try:yield
-    finally:official.make_dataset, official.make_policy = original_dataset, original_policy
+    finally:
+        official.make_dataset, official.make_policy = original_dataset, original_policy
+        if original_optimizer is not None:
+            official.make_optimizer_and_scheduler = original_optimizer

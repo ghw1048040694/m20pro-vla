@@ -85,6 +85,14 @@ def temporal_policy_class(base_policy_class):
             if decoding is not None:
                 from .stop_decoding import save_stop_decoding
                 save_stop_decoding(directory, decoding, binary)
+            precision = getattr(self, 'optimizer_precision', None)
+            if precision is not None:
+                from .optimizer_precision import save_precision_spec
+                save_precision_spec(directory, precision)
+            connector = getattr(self, 'visual_connector_adaptation', None)
+            if connector is not None:
+                from .visual_connector_adaptation import save_connector_spec
+                save_connector_spec(directory, connector)
             execution = getattr(self, 'execution_contract', None)
             if execution is not None:
                 from ..data.execution_contract import save_execution_contract
@@ -144,5 +152,11 @@ def temporal_policy_class(base_policy_class):
                 if head_init.exists():
                     raise ValueError('Runtime STOP decoding requires a saved trained binary head')
                 policy.model.stop_decoding_spec = decoding
+            from .visual_connector_adaptation import load_connector_spec, enable_visual_connector_adaptation
+            connector = load_connector_spec(directory)
+            if connector is not None:
+                enable_visual_connector_adaptation(policy, connector)
+            from .optimizer_precision import load_precision_spec
+            policy.optimizer_precision = load_precision_spec(directory)
             return policy
     return TemporalPolicyCandidate
