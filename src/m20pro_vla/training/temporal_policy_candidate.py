@@ -19,13 +19,15 @@ def temporal_policy_class(base_policy_class):
     optimizer resume still need separate integration/validation.
     """
     class TemporalPolicyCandidate(base_policy_class):
-        def __init__(self, config, *, temporal_spec=None, wrap_after_load=False, **kwargs):
+        def __init__(self, config, *, temporal_spec=None, wrap_after_load=False, binary_stop_spec=None, **kwargs):
             if config.max_state_dim != 32 or config.adapt_to_pi_aloha:
                 raise ValueError('Candidate requires original 32D M20 state')
             self._temporal_spec = temporal_spec or TemporalRGBSpec()
             super().__init__(config, **kwargs)
             if not wrap_after_load:
                 self._enable_temporal_core()
+            if binary_stop_spec is not None:
+                self.model.enable_binary_stop(binary_stop_spec)
 
         def _enable_temporal_core(self):
             if isinstance(self.model, TemporalFlowCoreCandidate):
@@ -39,7 +41,26 @@ def temporal_policy_class(base_policy_class):
             if getattr(self, 'training_objective', None) is None:
                 return super().forward(batch, noise=noise, time=time, reduction=reduction)
             from .physical_flow_loss import physical_flow_forward
-            return physical_flow_forward(self, batch, noise, time, reduction)
+            loss, metrics = physical_flow_forward(self, batch, noise, time, reduction)
+            spec = getattr(self.model, 'binary_stop_spec', None)
+            if spec is not None:
+                from .binary_stop import masked_binary_stop_loss
+                binary = masked_binary_stop_loss(self.model.last_stop_logits,
+                    batch['action'], batch['action_is_pad'], spec, reduction=reduction)
+                loss = loss + spec['loss_coefficient'] * binary
+                metrics.update(binary_stop_loss=float(binary.detach().mean()),
+                    loss=float(loss.detach().mean()))
+            return loss, metrics
+
+        def get_optim_params(self):
+            spec = getattr(self.model, 'binary_stop_spec', None)
+            if spec is None:
+                return super().get_optim_params()
+            head = list(self.model.binary_stop_head.parameters())
+            head_ids = {id(p) for p in head}
+            base = [p for p in self.parameters() if p.requires_grad and id(p) not in head_ids]
+            return [{'params': base}, {'params': head, 'lr': spec['head_learning_rate']}]
+
 
         def prepare_images(self, batch):
             base_view = SimpleNamespace(config=self.config, prepare_images=super().prepare_images)
@@ -56,6 +77,10 @@ def temporal_policy_class(base_policy_class):
             if objective is not None:
                 from .physical_flow_loss import CONTRACT_FILE as OBJECTIVE_FILE, validate_objective
                 (Path(directory)/OBJECTIVE_FILE).write_text(json.dumps(validate_objective(objective), indent=2)+'\n')
+            binary = getattr(self.model, 'binary_stop_spec', None)
+            if binary is not None:
+                from .binary_stop import validate_binary_stop_spec
+                (Path(directory)/'m20_binary_stop.json').write_text(json.dumps(validate_binary_stop_spec(binary), indent=2)+'\n')
             execution = getattr(self, 'execution_contract', None)
             if execution is not None:
                 from ..data.execution_contract import save_execution_contract
@@ -82,9 +107,20 @@ def temporal_policy_class(base_policy_class):
                 if temporal_spec is not None and stored != temporal_spec:
                     raise ValueError('Requested temporal sampling differs from checkpoint')
                 spec = stored
+            from .binary_stop import validate_binary_stop_spec, validate_saved_normalization
+            head_saved = directory/'m20_binary_stop.json'
+            head_init = directory/'m20_binary_stop_init.json'
+            if head_saved.exists() and head_init.exists():
+                raise ValueError('Saved head and untrained head request are mutually exclusive')
+            binary = None
+            if head_saved.exists() or head_init.exists():
+                binary = validate_binary_stop_spec(json.loads((head_saved if head_saved.exists() else head_init).read_text()))
+                validate_saved_normalization(directory, binary)
+                if not saved.exists():
+                    raise ValueError('Binary STOP requires the saved temporal policy')
             kwargs['strict'] = True
             policy = super().from_pretrained(directory, temporal_spec=spec,
-                wrap_after_load=not saved.is_file(), **kwargs)
+                wrap_after_load=not saved.is_file(), binary_stop_spec=binary if head_saved.exists() else None, **kwargs)
             if not saved.is_file():
                 policy._enable_temporal_core()
             elif policy.model.contract() != contract['core']:
@@ -93,5 +129,10 @@ def temporal_policy_class(base_policy_class):
             policy.execution_contract = load_execution_contract(directory)
             from .physical_flow_loss import load_objective
             policy.training_objective = load_objective(directory)
+            if binary is not None:
+                if policy.training_objective is None:
+                    raise ValueError('Binary STOP requires the explicit physical flow objective')
+                if head_init.exists():
+                    policy.model.enable_binary_stop(binary)
             return policy
     return TemporalPolicyCandidate
