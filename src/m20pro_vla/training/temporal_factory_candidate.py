@@ -50,4 +50,6 @@ def make_temporal_policy_candidate(official_factory, config, dataset, *, require
         raise ValueError('Returned policy sampling differs')
     if getattr(policy, 'execution_contract', None) != getattr(dataset.meta, 'execution_contract', None):
         raise ValueError('Loaded policy and training physical execution contracts differ')
+    if getattr(policy, 'state_input', None) != dataset.state_input:
+        raise ValueError('Loaded policy and dataset state input contracts differ')
     return policy

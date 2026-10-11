@@ -22,7 +22,7 @@ def temporal_process_contract(dataset, objective=None, binary_stop=None, optimiz
              'training/temporal_factory_candidate.py', 'training/temporal_policy_candidate.py',
              'training/temporal_flow_candidate.py', 'training/visual_prefix_identity.py',
              'training/temporal_rgb.py', 'training/physical_flow_loss.py', 'training/binary_stop.py',
-             'training/optimizer_precision.py')
+             'training/optimizer_precision.py', 'data/state_input.py')
     return dict(schema='m20_temporal_process_candidate_v1',
         raw=raw_training_contract(dataset.dataset), sampling=dataset.sampling_contract(), training_objective=objective, binary_stop=binary_stop, optimizer_precision=optimizer_precision,
         adapter_sha256={p:hashlib.sha256((package/p).read_bytes()).hexdigest() for p in paths})
@@ -51,7 +51,9 @@ def temporal_process_hooks(official, settings, spec):
         if not cfg.resume and (path.exists() or (Path(cfg.output_dir)/'m20_raw_training_contract.json').exists()):
             raise ValueError('Fresh temporal run cannot overwrite an existing run contract')
         base = official_raw_dataset_factory(cfg, settings)
-        dataset = TemporalRawDatasetCandidate(base, spec)
+        from ..data.state_input import load_state_input
+        state_input = load_state_input(cfg.policy.pretrained_path) if cfg.policy.pretrained_path else None
+        dataset = TemporalRawDatasetCandidate(base, spec, state_input=state_input)
         from .physical_flow_loss import load_objective
         objective = load_objective(cfg.policy.pretrained_path) if cfg.policy.pretrained_path else None
         binary_stop = None

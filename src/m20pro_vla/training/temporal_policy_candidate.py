@@ -93,6 +93,10 @@ def temporal_policy_class(base_policy_class):
             if connector is not None:
                 from .visual_connector_adaptation import save_connector_spec
                 save_connector_spec(directory, connector)
+            state_input = getattr(self, 'state_input', None)
+            if state_input is not None:
+                from ..data.state_input import save_state_input
+                save_state_input(directory, state_input)
             execution = getattr(self, 'execution_contract', None)
             if execution is not None:
                 from ..data.execution_contract import save_execution_contract
@@ -158,5 +162,7 @@ def temporal_policy_class(base_policy_class):
                 enable_visual_connector_adaptation(policy, connector)
             from .optimizer_precision import load_precision_spec
             policy.optimizer_precision = load_precision_spec(directory)
+            from ..data.state_input import load_state_input
+            policy.state_input = load_state_input(directory)
             return policy
     return TemporalPolicyCandidate

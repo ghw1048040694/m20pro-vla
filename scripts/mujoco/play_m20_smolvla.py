@@ -446,7 +446,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             state = m20_smolvla_state(proprioception(model, data), lidar)
             if temporal_runtime is not None:
                 temporal_runtime.observe({'front': front, 'rear': rear}, tick=step,
-                    task=str(metadata['task_text']), episode=str(args.episode_json))
+                    task=str(metadata['task_text']), state=state, episode=str(args.episode_json))
             action_tensor, prediction_evidence = action_freshener.predict(policy, lambda: (
                 temporal_runtime.predict(state) if temporal_runtime is not None else predict_action(
                 {

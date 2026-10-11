@@ -73,7 +73,22 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
         )
     if smolvla_dataset_backend(config) == 'raw':
         from .raw_smolvla import make_raw_dataset, raw_training_settings
-        metadata = make_raw_dataset(dataset_root, raw_training_settings(config)).meta
+        base_dataset = make_raw_dataset(dataset_root, raw_training_settings(config))
+        from ..data.state_input import load_state_input, validate_state_input
+        inherited_state_input = load_state_input(snapshot)
+        state_input = settings.get('state_input', inherited_state_input)
+        if inherited_state_input is not None and state_input != inherited_state_input:
+            raise ValueError('Cannot silently replace a saved state input contract')
+        if state_input is not None:
+            validate_state_input(state_input)
+            temporal = smolvla_temporal_spec(config)
+            if temporal is None:
+                raise ValueError('Relative wheel state requires the temporal raw policy')
+            from ..data.temporal_raw_candidate import TemporalRawDatasetCandidate
+            from ..data.temporal_rgb import TemporalRGBSpec
+            metadata = TemporalRawDatasetCandidate(base_dataset,TemporalRGBSpec.from_dict(temporal),state_input=state_input).meta
+        else:
+            metadata = base_dataset.meta
     else:
         metadata = LeRobotDatasetMetadata(str(settings["repo_id"]), root=dataset_root)
     features = dataset_to_policy_features(metadata.features)
@@ -156,6 +171,9 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
         if smolvla_temporal_spec(config) is None:
             raise ValueError('Optimizer precision requires the temporal M20 policy')
         save_precision_spec(prepared, precision)
+    if smolvla_dataset_backend(config) == 'raw' and state_input is not None:
+        from ..data.state_input import save_state_input
+        save_state_input(prepared, state_input)
     return prepared
 
 
