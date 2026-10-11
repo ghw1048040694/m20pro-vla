@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 import numpy as np
 from m20pro_vla.data.execution_contract import (
-    HUMAN_CONTRACT, load_execution_contract, save_execution_contract,
+    HUMAN_CONTRACT, HUMAN_STOP_SUPPORT_CONTRACT, load_execution_contract, save_execution_contract,
     validate_execution_contract, physical_action,
 )
 from m20pro_vla.sim.keyboard_teleop import executed_request, STOP
@@ -19,6 +19,10 @@ class HumanExecutionContractTest(unittest.TestCase):
             self.assertEqual(load_execution_contract(d), HUMAN_CONTRACT)
             wrong = {**HUMAN_CONTRACT, 'yaw_limits': [-.15, .15]}
             with self.assertRaises(ValueError):validate_execution_contract(wrong)
+            save_execution_contract(d, HUMAN_STOP_SUPPORT_CONTRACT)
+            self.assertEqual(load_execution_contract(d), HUMAN_STOP_SUPPORT_CONTRACT)
+            with self.assertRaises(ValueError):
+                validate_execution_contract({**HUMAN_STOP_SUPPORT_CONTRACT, 'stop_stance_rate_radps': 5.})
 
     def test_signed_physical_range_stop_and_invalid_output(self):
         np.testing.assert_array_equal(physical_action([-.25, .1, -.4, 0]), [-.25,0,-.4,0])

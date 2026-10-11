@@ -16,10 +16,15 @@ HUMAN_CONTRACT = {
     'motion': 'keyboard_separate_axes_slew_50hz_v1',
     'stop_distance': .5, 'slow_distance': 1.25,
 }
+HUMAN_STOP_SUPPORT_CONTRACT = {
+    **HUMAN_CONTRACT,
+    'profile': 'human_keyboard_stop_support_v2',
+    'stop_stance_rate_radps': .5,
+}
 
 
 def validate_execution_contract(value):
-    if value != HUMAN_CONTRACT:
+    if value not in (HUMAN_CONTRACT, HUMAN_STOP_SUPPORT_CONTRACT):
         raise ValueError('Unsupported or inconsistent M20 execution contract')
     return deepcopy(value)
 

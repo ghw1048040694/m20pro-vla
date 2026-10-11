@@ -317,7 +317,9 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             raise ValueError('Run contracted human policy through the configured experiment rendering environment')
         model.vis.quality.offsamples = 0
     controller = build_low_level_controller(model, **(
-        {'teacher_motion_limits': (.5, .4), 'inference_threads': 1} if execution_contract else {}))
+        {'teacher_motion_limits': (.5, .4), 'inference_threads': 1,
+         'stop_stance_rate': execution_contract.get('stop_stance_rate_radps', 0.)}
+        if execution_contract else {}))
     controller.reset(
         data,
         float(metadata.get("initial_yaw", 0.0)),

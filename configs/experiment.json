@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_human_keyboard_bounded_finetune_v1",
+  "stage": "s3_human600_red_stop_support_diagnostic",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
@@ -11,8 +11,8 @@
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s3_human_keyboard_from_s3final_v1_20261011",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_v1_steps600_20261011",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_keyboard_training3_20261011",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_v1_stop_support_20261011",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human600_red_stop_support_20261011",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -121,7 +121,7 @@
     "raw_cache_dir": ".runtime/cache/raw_human_keyboard_v1_20261011",
     "execution_contract": {
       "schema": "m20_execution_contract_v1",
-      "profile": "human_keyboard_v1",
+      "profile": "human_keyboard_stop_support_v2",
       "action_units": [
         "m/s",
         "m/s",
@@ -143,13 +143,14 @@
       "render": "interactive-v1: egl-llvmpipe, no shadows/reflections/MSAA",
       "motion": "keyboard_separate_axes_slew_50hz_v1",
       "stop_distance": 0.5,
-      "slow_distance": 1.25
+      "slow_distance": 1.25,
+      "stop_stance_rate_radps": 0.5
     },
     "adaptation_scope": "reviewed_human"
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
-    "episode_ids": "24001,24002,24003",
+    "episode_ids": "24002",
     "policy_steps": 2500,
     "device": "cuda",
     "seed": 20261009,
@@ -164,7 +165,7 @@
     "obstacle_contact_tolerance_steps": 10,
     "fresh_stop_confirmation": false,
     "checkpoint_step": 600,
-    "episode_count": 3,
+    "episode_count": 1,
     "match_teacher_budget": false,
     "action_replan_steps": 10,
     "visual_stop_gate": false,

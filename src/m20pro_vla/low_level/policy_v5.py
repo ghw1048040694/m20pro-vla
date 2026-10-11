@@ -149,7 +149,8 @@ class M20V5PolicyController(M20LowLevelController):
     def __init__(self, model: mujoco.MjModel, onnx_path: str | Path | None = None,
                  providers: tuple[str, ...] = ("CPUExecutionProvider",),
                  teacher_motion_limits: tuple[float, float] | None = None,
-                 inference_threads: int | None = None):
+                 inference_threads: int | None = None,
+                 stop_stance_rate: float = 0.):
         super().__init__(model)
         if teacher_motion_limits is not None:
             if tuple(teacher_motion_limits) != (.50, .40):
@@ -158,6 +159,9 @@ class M20V5PolicyController(M20LowLevelController):
         if inference_threads is not None and inference_threads < 1:
             raise ValueError("inference_threads must be positive")
         self.inference_threads = inference_threads
+        if stop_stance_rate not in (0., .5):
+            raise ValueError('Only legacy hold or physically validated .5 rad/s stop support is supported')
+        self.stop_stance_rate = float(stop_stance_rate)
         self._joint_id = {
             name: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
             for name in ACTION_JOINT_NAMES
@@ -332,6 +336,11 @@ class M20V5PolicyController(M20LowLevelController):
             # leg motion. Hold the attained stance and ramp wheel targets down
             # together; abruptly clamping only wheels destabilizes the body.
             self._brake_wheels += np.clip(-self._brake_wheels, -0.2, 0.2)
+            if self.stop_stance_rate:
+                # A transient compressed stance can sink if held indefinitely.
+                # Keep wheel braking while settling legs toward nominal support.
+                delta = self.stop_stance_rate * CONTROL_DT
+                self._stop_pose += np.clip(STANCE - self._stop_pose, -delta, delta)
             self._ctrl_target[list(LEG_ACTION_ACTUATORS)] = self._stop_pose
             self._ctrl_target[list(WHEEL_ACTION_ACTUATORS)] = self._brake_wheels
             self.last_action[:12] = (self._stop_pose - STANCE) / LEG_ACTION_SCALE
