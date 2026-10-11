@@ -114,6 +114,15 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
     execution = settings.get('execution_contract')
     if execution is not None:
         save_execution_contract(prepared, execution)
+    from .physical_flow_loss import CONTRACT_FILE as OBJECTIVE_FILE, load_objective, validate_objective
+    objective = settings.get('training_objective', load_objective(snapshot))
+    target_objective = prepared/OBJECTIVE_FILE
+    if objective is not None:
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Physical objective requires the temporal M20 policy')
+        target_objective.write_text(json.dumps(validate_objective(objective), indent=2)+'\n')
+    elif target_objective.exists():
+        raise ValueError('Prepared policy has an unexpected training objective')
     return prepared
 
 

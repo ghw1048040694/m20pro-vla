@@ -14,16 +14,16 @@ TEMPORAL_SETTINGS_ENV = 'M20PRO_TEMPORAL_TRAINING_SPEC'
 CONTRACT_FILE = 'm20_temporal_training_contract.json'
 
 
-def temporal_process_contract(dataset):
+def temporal_process_contract(dataset, objective=None):
     from .raw_smolvla import raw_training_contract
     package = Path(__file__).resolve().parents[1]
     paths = ('data/raw_dataset.py', 'data/temporal_raw_candidate.py', 'data/temporal_rgb.py',
              'training/raw_smolvla.py', 'training/temporal_process_candidate.py',
              'training/temporal_factory_candidate.py', 'training/temporal_policy_candidate.py',
              'training/temporal_flow_candidate.py', 'training/visual_prefix_identity.py',
-             'training/temporal_rgb.py')
+             'training/temporal_rgb.py', 'training/physical_flow_loss.py')
     return dict(schema='m20_temporal_process_candidate_v1',
-        raw=raw_training_contract(dataset.dataset), sampling=dataset.sampling_contract(),
+        raw=raw_training_contract(dataset.dataset), sampling=dataset.sampling_contract(), training_objective=objective,
         adapter_sha256={p:hashlib.sha256((package/p).read_bytes()).hexdigest() for p in paths})
 
 
@@ -50,7 +50,9 @@ def temporal_process_hooks(official, settings, spec):
             raise ValueError('Fresh temporal run cannot overwrite an existing run contract')
         base = official_raw_dataset_factory(cfg, settings)
         dataset = TemporalRawDatasetCandidate(base, spec)
-        contract = temporal_process_contract(dataset)
+        from .physical_flow_loss import load_objective
+        objective = load_objective(cfg.policy.pretrained_path) if cfg.policy.pretrained_path else None
+        contract = temporal_process_contract(dataset, objective)
         if cfg.resume:
             if not path.is_file() or json.loads(path.read_text()) != contract:
                 raise ValueError('Temporal source/sampling/adapter differs from saved run')

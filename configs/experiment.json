@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_human_fresh_correction_fit600_original_start_training3_diagnostic",
+  "stage": "s3_human_physical_flow_objective_paired_fit600",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_reviewed7_with_corrections_v2_20261011",
@@ -10,9 +10,9 @@
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
-    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_correction_from_human600_v2_20261011",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_correction_fit600_v2_20261011",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_correction_fit600_training3_20261011",
+    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_physical_loss_from_human600_20261011",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_physical_loss_fit600_20261011",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_physical_loss_training3_20261011",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -146,7 +146,21 @@
       "slow_distance": 1.25,
       "stop_stance_rate_radps": 0.5
     },
-    "adaptation_scope": "reviewed_human"
+    "adaptation_scope": "reviewed_human",
+    "training_objective": {
+      "schema": "m20_physical_flow_loss_v1",
+      "action_dim": 4,
+      "model_action_dim": 32,
+      "chunk_size": 50,
+      "padding_key": "action_is_pad",
+      "reduction": "mean_of_per_sample_valid_time_axis_means",
+      "axis_weights": [
+        1,
+        1,
+        1,
+        1
+      ]
+    }
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
@@ -356,5 +370,5 @@
       }
     ]
   },
-  "pipeline_stage": "s3_human_fresh_correction_bounded_fit600"
+  "pipeline_stage": "s3_human_physical_flow_objective_paired_fit600"
 }

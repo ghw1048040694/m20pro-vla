@@ -35,6 +35,12 @@ def temporal_policy_class(base_policy_class):
             self.model.identity.to(device=core.state_proj.weight.device)
             self.model.train(self.training)
 
+        def forward(self, batch, noise=None, time=None, reduction='mean'):
+            if getattr(self, 'training_objective', None) is None:
+                return super().forward(batch, noise=noise, time=time, reduction=reduction)
+            from .physical_flow_loss import physical_flow_forward
+            return physical_flow_forward(self, batch, noise, time, reduction)
+
         def prepare_images(self, batch):
             base_view = SimpleNamespace(config=self.config, prepare_images=super().prepare_images)
             images, masks, _ = prepare_temporal_images(base_view, batch, self._temporal_spec)
@@ -46,6 +52,10 @@ def temporal_policy_class(base_policy_class):
             super()._save_pretrained(directory)
             contract = dict(schema='m20_temporal_policy_candidate_v1', core=self.model.contract())
             (Path(directory)/CONTRACT_FILE).write_text(json.dumps(contract, indent=2)+'\n')
+            objective = getattr(self, 'training_objective', None)
+            if objective is not None:
+                from .physical_flow_loss import CONTRACT_FILE as OBJECTIVE_FILE, validate_objective
+                (Path(directory)/OBJECTIVE_FILE).write_text(json.dumps(validate_objective(objective), indent=2)+'\n')
             execution = getattr(self, 'execution_contract', None)
             if execution is not None:
                 from ..data.execution_contract import save_execution_contract
@@ -81,5 +91,7 @@ def temporal_policy_class(base_policy_class):
                 raise ValueError('Saved core identity/sampling contract differs')
             from ..data.execution_contract import load_execution_contract
             policy.execution_contract = load_execution_contract(directory)
+            from .physical_flow_loss import load_objective
+            policy.training_objective = load_objective(directory)
             return policy
     return TemporalPolicyCandidate
