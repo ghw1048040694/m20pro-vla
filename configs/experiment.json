@@ -224,22 +224,137 @@
     "nominal_mujoco_friction": 0.6
   },
   "teleoperation": {
-    "port": 8765,
-    "source_dir": ".runtime/datasets/m20_s3_v8_observe_production_physical_accepted_v1",
+    "source_dir": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
     "source_episode_ids": [
-      18038,
-      18036,
-      18037
+      24001,
+      24002,
+      24003,
+      24003
     ],
+    "output_dir": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/datasets/m20_s3_human_correction_quarantine_20261011",
+    "port": 8765,
     "max_steps": 19000,
-    "output_dir": ".runtime/datasets/m20_s3_human_keyboard_quarantine_20261010",
-    "action_contract": "m20_human_keyboard_physical_v1",
-    "training_ready": false,
-    "render_profile": "interactive-v1",
-    "render_environment": {
-      "MUJOCO_GL": "egl",
-      "LIBGL_ALWAYS_SOFTWARE": "1",
-      "GALLIUM_DRIVER": "llvmpipe"
-    }
-  }
+    "execution_contract": {
+      "schema": "m20_execution_contract_v1",
+      "profile": "human_keyboard_stop_support_v2",
+      "action_units": [
+        "m/s",
+        "m/s",
+        "rad/s",
+        "stop"
+      ],
+      "forward_limits": [
+        -0.25,
+        0.5
+      ],
+      "yaw_limits": [
+        -0.4,
+        0.4
+      ],
+      "lateral": 0.0,
+      "policy_fps": 25,
+      "control_fps": 50,
+      "state": "m20_smolvla_state_32_no_world_no_previous_action",
+      "render": "interactive-v1: egl-llvmpipe, no shadows/reflections/MSAA",
+      "motion": "keyboard_separate_axes_slew_50hz_v1",
+      "stop_distance": 0.5,
+      "slow_distance": 1.25,
+      "stop_stance_rate_radps": 0.5
+    },
+    "correction_cases": [
+      {
+        "source_episode_id": 24001,
+        "learner_episode_id": 24001,
+        "takeover_policy_step": 1600,
+        "label": "黄色：重新找到目标，纠正停滞路线",
+        "trace": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24001.metrics.trace.npz",
+        "trace_sha256": "4b3a58f3922f20158eb568470fecfc3184d12f098cd4fbbce03d4dd42ad9d14e",
+        "metrics": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24001.metrics.json",
+        "metrics_sha256": "e58049513e5f65987715ecae511b5c9d8df7d834c8a13352f1bd8d5a7324ad09",
+        "episode_json": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011/episode_24001.json",
+        "episode_json_sha256": "8708a9d2eb9623873e35909c3d403981321bfbca685706dd5bb006da36a231f0",
+        "scene_sha256": "88e34bac7ec24a808323fd5f2d7b6334e97962264879d14618f2de6750505a6d",
+        "source_json_sha256": "8708a9d2eb9623873e35909c3d403981321bfbca685706dd5bb006da36a231f0",
+        "source_model_weights_sha256": "e589c5472e419a37aa0d5295ec8d3fb1dde92ef795580c60e09e071babf04d10",
+        "failure_window": {
+          "distance": 3.011607441461422,
+          "pixels": 0,
+          "front": 1.256583571434021,
+          "next200_stop_fraction": 0.77,
+          "next200_displacement": 0.027869099709583272,
+          "next200_emergency_raw_ticks": 0
+        }
+      },
+      {
+        "source_episode_id": 24002,
+        "learner_episode_id": 24002,
+        "takeover_policy_step": 600,
+        "label": "红色：纠正提前停车，靠近后持续停车",
+        "trace": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24002.metrics.trace.npz",
+        "trace_sha256": "1281de406c652fbd840aa3ff709139e875d79f49c551fc1527a57401de40455c",
+        "metrics": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24002.metrics.json",
+        "metrics_sha256": "3136c8b561121a4e0c62d60e9b5c2fec13a4238ce74f1ac5fd287eae193d8a7c",
+        "episode_json": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011/episode_24002.json",
+        "episode_json_sha256": "85fcd734576986ea87a5fe5f2d4be22edbb555b5f25c2f2ebfd4bbc1ee4c8761",
+        "scene_sha256": "88e34bac7ec24a808323fd5f2d7b6334e97962264879d14618f2de6750505a6d",
+        "source_json_sha256": "85fcd734576986ea87a5fe5f2d4be22edbb555b5f25c2f2ebfd4bbc1ee4c8761",
+        "source_model_weights_sha256": "e589c5472e419a37aa0d5295ec8d3fb1dde92ef795580c60e09e071babf04d10",
+        "failure_window": {
+          "distance": 1.137735580464517,
+          "pixels": 567,
+          "front": 2.1039912700653076,
+          "next200_stop_fraction": 0.93,
+          "next200_displacement": 0.1114708626623095,
+          "next200_emergency_raw_ticks": 0
+        }
+      },
+      {
+        "source_episode_id": 24003,
+        "learner_episode_id": 24003,
+        "takeover_policy_step": 800,
+        "label": "绿色：到达后持续停车",
+        "trace": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24003.metrics.trace.npz",
+        "trace_sha256": "81136d8f448b9b7b08b655404dfd79da86fe3f2dd7e4ae74978664b4081ebccc",
+        "metrics": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24003.metrics.json",
+        "metrics_sha256": "1096ee6c323d73257028a3b5231f6c2537f81deb95b379ae5789ff1a2567da14",
+        "episode_json": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011/episode_24003.json",
+        "episode_json_sha256": "5e8888795f58dc3c9530994a9f2b76757b41aaa096075c5d2a637dbdd70198b9",
+        "scene_sha256": "88e34bac7ec24a808323fd5f2d7b6334e97962264879d14618f2de6750505a6d",
+        "source_json_sha256": "5e8888795f58dc3c9530994a9f2b76757b41aaa096075c5d2a637dbdd70198b9",
+        "source_model_weights_sha256": "e589c5472e419a37aa0d5295ec8d3fb1dde92ef795580c60e09e071babf04d10",
+        "failure_window": {
+          "distance": 0.8529311500672713,
+          "pixels": 729,
+          "front": 0.7163583636283875,
+          "next200_stop_fraction": 0.08,
+          "next200_displacement": 0.19158826882327634,
+          "next200_emergency_raw_ticks": 0
+        }
+      },
+      {
+        "source_episode_id": 24003,
+        "learner_episode_id": 24003,
+        "takeover_policy_step": 2000,
+        "label": "绿色：后退脱困、重新观察并停车",
+        "trace": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24003.metrics.trace.npz",
+        "trace_sha256": "81136d8f448b9b7b08b655404dfd79da86fe3f2dd7e4ae74978664b4081ebccc",
+        "metrics": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011/episode_24003.metrics.json",
+        "metrics_sha256": "1096ee6c323d73257028a3b5231f6c2537f81deb95b379ae5789ff1a2567da14",
+        "episode_json": "/home/ubuntu/VLA-Learning/projects/m20pro-ros2-sim/.runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011/episode_24003.json",
+        "episode_json_sha256": "5e8888795f58dc3c9530994a9f2b76757b41aaa096075c5d2a637dbdd70198b9",
+        "scene_sha256": "88e34bac7ec24a808323fd5f2d7b6334e97962264879d14618f2de6750505a6d",
+        "source_json_sha256": "5e8888795f58dc3c9530994a9f2b76757b41aaa096075c5d2a637dbdd70198b9",
+        "source_model_weights_sha256": "e589c5472e419a37aa0d5295ec8d3fb1dde92ef795580c60e09e071babf04d10",
+        "failure_window": {
+          "distance": 0.7422861704632494,
+          "pixels": 0,
+          "front": 0.46274736523628235,
+          "next200_stop_fraction": 0.0,
+          "next200_displacement": 0.0009304741911353671,
+          "next200_emergency_raw_ticks": 400
+        }
+      }
+    ]
+  },
+  "pipeline_stage": "s3_human_closed_loop_correction_quarantine"
 }

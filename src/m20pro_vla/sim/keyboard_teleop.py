@@ -23,6 +23,7 @@ from PIL import Image
 
 from m20pro_vla.low_level.factory import build_low_level_controller
 from m20pro_vla.low_level.shield import lidar_safety_shield
+from m20pro_vla.data.execution_contract import HUMAN_CONTRACT, validate_execution_contract
 from m20pro_vla.sim.mujoco import (
     ASSET, ObjectSpec, ObstacleSpec, SceneLightSpec, build_scene,
     planar_lidar, proprioception,
@@ -150,6 +151,11 @@ class Recorder:
     def __init__(self, config, run_path):
         self.config, self.run_path = config, Path(run_path)
         self.settings = config['teleoperation']
+        self.execution = validate_execution_contract(self.settings.get('execution_contract', HUMAN_CONTRACT))
+        self.correction_cases = self.settings.get('correction_cases', [])
+        if self.correction_cases and len(self.correction_cases) != len(self.settings['source_episode_ids']):
+            raise ValueError('Each correction must name one training scene')
+        self.replay_count = 0
         self.output = Path(self.settings['output_dir'])
         self.output.mkdir(parents=True, exist_ok=True)
         source = Path(self.settings['source_dir']).resolve()
@@ -189,6 +195,7 @@ class Recorder:
             'action_units': ['m/s', 'm/s', 'rad/s', 'stop'],
             'action_limits': {'forward': [-.25, .5], 'yaw': [-.4, .4]},
             'watchdog_s': .3, 'v8_retrained': False,
+            'execution_contract': self.execution,
             'render_profile': 'interactive-v1: egl-llvmpipe, no shadows/reflections/MSAA',
         }
         dump(self.output / f'session_{self.session}.json', self.base_receipt)
@@ -232,23 +239,74 @@ class Recorder:
         self.data = mujoco.MjData(self.model)
         # Preserve the pinned scene/asset friction exactly; no gait adaptation.
         self.model.vis.quality.offsamples = 0
-        self.controller = build_low_level_controller(self.model, teacher_motion_limits=(.5, .4), inference_threads=1)
+        self.controller = build_low_level_controller(self.model, teacher_motion_limits=(.5, .4), inference_threads=1,
+            stop_stance_rate=self.execution.get('stop_stance_rate_radps', 0.))
         self.controller.reset(self.data, float(metadata['initial_yaw']), np.asarray(metadata['initial_xy']))
         for _ in range(int(metadata.get('warmup_steps', 35))):
             self.controller.step(self.data, np.zeros(4))
+        self.previous = STOP.copy()
+        self.correction_receipt = self.replay_correction() if self.correction_cases else None
         self.renderer = mujoco.Renderer(self.model, height=96, width=160)
         self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
         self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = False
         from OpenGL import GL
         self.base_receipt['gl_renderer'] = GL.glGetString(GL.GL_RENDERER).decode()
         self.obstacle_ids = {mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, o.name + '_geom') for o in obstacles}
-        self.previous = STOP.copy()
         self.samples = 0
         self.capture()
         self.publish(mode='ready', source_episode_id=metadata['episode_id'], task=metadata['task_text'],
                      task_number=self.task_index + 1, task_count=len(self.episodes), steps=0,
                      sim_seconds=0, measured_fps=0, action=STOP.tolist(), shield='none',
-                     saved=self.saved, error=None, recording_id=None)
+                     saved=self.saved, error=None, recording_id=None,
+                     correction_label=self.correction_cases[self.task_index]['label'] if self.correction_cases else None,
+                     correction_replay_verified=bool(self.correction_receipt))
+
+    def replay_correction(self):
+        """Physically reach a pinned failed learner state; never label its prefix.
+
+        No policy loads, GT teleport, target route, or copied training RGB/actions.
+        Only new human-controlled steps after begin() are recorded as demonstrations.
+        """
+        case = self.correction_cases[self.task_index]
+        for key in ('trace', 'metrics', 'episode_json'):
+            if sha(case[key]) != case[key + '_sha256']:
+                raise ValueError('Correction source changed: ' + key)
+        metrics = json.loads(Path(case['metrics']).read_text())
+        reference = json.loads(Path(case['episode_json']).read_text())
+        if (reference['layout_id'] != self.metadata['layout_id'] or
+                metrics['execution_contract'] != self.execution or
+                sha(self.scene) != case['scene_sha256'] or self.source_sha != case['source_json_sha256']):
+            raise ValueError('Correction physical scene/contract mismatch')
+        for key in ('objects', 'obstacles', 'scene_light', 'initial_xy', 'initial_yaw', 'task_text', 'target_label'):
+            if reference[key] != self.metadata[key]:
+                raise ValueError('Correction source metadata mismatch: ' + key)
+        t = int(case['takeover_policy_step'])
+        with np.load(case['trace'], allow_pickle=False) as z:
+            commands = z['raw_control_actions']
+            observations, posts = z['observation_xy'], z['post_action_xy']
+            if not 0 < t < len(commands) or commands.shape[1:] != (2, 4):
+                raise ValueError('Invalid correction takeover step')
+            if not np.isfinite(commands).all():
+                raise ValueError('Nonfinite correction commands')
+            for tick in range(t):
+                if not np.array_equal(self.data.qpos[:2], observations[tick]):
+                    raise ValueError(f'Correction replay pre-state mismatch at {tick}')
+                for action in commands[tick]:
+                    self.controller.step(self.data, action)
+                if not np.array_equal(self.data.qpos[:2], posts[tick]):
+                    raise ValueError(f'Correction replay post-state mismatch at {tick}')
+            self.previous = commands[t-1, -1].copy()
+            if not np.array_equal(self.data.qpos[:2], observations[t]):
+                raise ValueError('Correction takeover observation mismatch')
+        receipt = {**case, 'policy_prefix_steps': t, 'raw_prefix_steps': 2*t,
+            'all_prefix_xy_bit_identical': True, 'prefix_is_training_data': False,
+            'human_recording_starts_after_replay': True, 'temporal_history_reset': True,
+            'takeover_qpos': self.data.qpos.tolist(), 'takeover_qvel': self.data.qvel.tolist(),
+            'takeover_sim_time': float(self.data.time)}
+        path = self.output / f'replay_{self.session}_{self.task_index}_{self.replay_count}.json'
+        self.replay_count += 1
+        dump(path, receipt)
+        return {**receipt, 'receipt': str(path), 'receipt_sha256': sha(path)}
 
     def capture(self):
         images = {}
@@ -279,6 +337,8 @@ class Recorder:
             'source_episode_id': self.metadata['episode_id'], 'source_metadata': self.metadata,
             'source_json_sha256': self.source_sha, 'scene_sha256': sha(self.scene),
             'started_at': datetime.now(timezone.utc).isoformat(), 'status': 'recording'}
+        if self.correction_receipt:
+            self.record_meta['correction_replay'] = self.correction_receipt
         dump(self.folder / 'metadata.json', self.record_meta)
         self.publish(mode='recording', recording_id=self.record_id)
 
