@@ -29,6 +29,12 @@ _FIXED = dict(
     loss_coefficient=1.,
     normalization='float32_mean_std_forward_add_eps_inverse_std_only',
 )
+VISUAL_LANGUAGE_SCHEMA = 'm20_visual_language_binary_stop_v2'
+_VARIANTS = {
+    _FIXED['schema']: _FIXED,
+    VISUAL_LANGUAGE_SCHEMA: dict(_FIXED, schema=VISUAL_LANGUAGE_SCHEMA,
+        observation='final_prefix_last_valid_visual_language_group0_token'),
+}
 _VARIABLE = {
     'stop_mean', 'stop_std', 'normalization_epsilon',
     'normalized_stop_zero', 'normalized_stop_one',
@@ -42,14 +48,18 @@ def _number(value, name):
     return float(value)
 
 
-def make_binary_stop_spec(stop_mean, stop_std, normalization_epsilon, hidden_dim=960):
+def make_binary_stop_spec(stop_mean, stop_std, normalization_epsilon, hidden_dim=960,
+                          *, schema='m20_observation_binary_stop_v1'):
     """Build endpoints using the installed processor's actual float32 arithmetic.
 
     Its forward transform divides by std + epsilon; its inverse multiplies by
     std alone. Store both endpoint pairs, so labels and output probabilities
     each use the correct direction without changing the existing processor.
     """
-    if type(hidden_dim) is not int or hidden_dim != _FIXED['hidden_dim']:
+    if schema not in _VARIANTS:
+        raise ValueError('Unknown binary STOP input schema')
+    fixed = _VARIANTS[schema]
+    if type(hidden_dim) is not int or hidden_dim != fixed['hidden_dim']:
         raise ValueError('This STOP architecture requires hidden_dim=960')
     mean = _number(stop_mean, 'stop_mean')
     std = _number(stop_std, 'stop_std')
@@ -64,7 +74,7 @@ def make_binary_stop_spec(stop_mean, stop_std, normalization_epsilon, hidden_dim
     output = (endpoints - mean32) / std32
     if not torch.isfinite(train).all() or not torch.isfinite(output).all() or train[1] <= train[0]:
         raise ValueError('STOP normalization endpoints must be finite and distinct')
-    return dict(_FIXED, stop_mean=float(mean32), stop_std=float(std32),
+    return dict(fixed, stop_mean=float(mean32), stop_std=float(std32),
                 normalization_epsilon=epsilon,
                 normalized_stop_zero=float(train[0]), normalized_stop_one=float(train[1]),
                 normalized_stop_output_zero=float(output[0]),
@@ -74,10 +84,11 @@ def make_binary_stop_spec(stop_mean, stop_std, normalization_epsilon, hidden_dim
 def validate_binary_stop_spec(spec):
     if not isinstance(spec, dict) or set(spec) != set(_FIXED) | _VARIABLE:
         raise ValueError('Unknown binary STOP contract fields')
-    if any(type(spec[key]) is not type(value) or spec[key] != value for key, value in _FIXED.items()):
+    fixed = _VARIANTS.get(spec.get('schema'))
+    if fixed is None or any(type(spec[key]) is not type(value) or spec[key] != value for key, value in fixed.items()):
         raise ValueError('Unknown binary STOP architecture or objective')
     expected = make_binary_stop_spec(spec['stop_mean'], spec['stop_std'],
-                                    spec['normalization_epsilon'], spec['hidden_dim'])
+                                    spec['normalization_epsilon'], spec['hidden_dim'], schema=spec['schema'])
     if any(_number(spec[key], key) != expected[key] for key in _VARIABLE):
         raise ValueError('Binary STOP endpoints disagree with saved normalization statistics')
     return deepcopy(expected)
@@ -118,7 +129,7 @@ def _saved_action_stats(directory, filename, registry_name):
     return tensors, _number(config['eps'], 'saved normalization epsilon')
 
 
-def make_binary_stop_spec_from_saved(directory):
+def make_binary_stop_spec_from_saved(directory, *, schema='m20_observation_binary_stop_v1'):
     """Read only saved processor metadata and its small action-stat tensors."""
     pre, epsilon = _saved_action_stats(directory, 'policy_preprocessor.json', 'normalizer_processor')
     post, post_epsilon = _saved_action_stats(directory, 'policy_postprocessor.json', 'unnormalizer_processor')
@@ -128,12 +139,12 @@ def make_binary_stop_spec_from_saved(directory):
     if (config.get('max_action_dim') != 32 or config.get('chunk_size') != 50
             or config.get('output_features', {}).get('action') != {'type': 'ACTION', 'shape': [4]}):
         raise ValueError('Saved checkpoint differs from the physical max32 chunk50 architecture')
-    return make_binary_stop_spec(float(pre[0][3]), float(pre[1][3]), epsilon)
+    return make_binary_stop_spec(float(pre[0][3]), float(pre[1][3]), epsilon, schema=schema)
 
 
 def validate_saved_normalization(directory, spec):
     spec = validate_binary_stop_spec(spec)
-    if spec != make_binary_stop_spec_from_saved(directory):
+    if spec != make_binary_stop_spec_from_saved(directory, schema=spec['schema']):
         raise ValueError('Binary STOP contract differs from the actual saved action processors')
     return spec
 
@@ -149,8 +160,8 @@ def make_binary_stop_head(spec):
     return head
 
 
-def prefix_stop_logits(head, prefix_out, prefix_pad_masks):
-    """Read only the final valid prefix token, preserving its gradient graph.
+def prefix_stop_logits(head, prefix_out, prefix_pad_masks, spec=None, prefix_attention_masks=None):
+    """Read the versioned prefix token, preserving its gradient graph.
 
     Missing history and padded language create interior mask gaps, so the
     number of valid positions is not the state token's absolute index.
@@ -161,6 +172,20 @@ def prefix_stop_logits(head, prefix_out, prefix_pad_masks):
             or prefix_out.shape[-1] != head.in_features or head.out_features != 50):
         raise ValueError('Expected aligned prefix hidden states and boolean padding mask')
     valid = prefix_pad_masks.to(device=prefix_out.device)
+    if spec is not None and validate_binary_stop_spec(spec)['schema'] == VISUAL_LANGUAGE_SCHEMA:
+        if (prefix_attention_masks is None or prefix_attention_masks.dtype != torch.bool
+                or prefix_attention_masks.shape != valid.shape):
+            raise ValueError('Visual-language STOP requires aligned prefix attention groups')
+        groups = prefix_attention_masks.to(device=prefix_out.device).cumsum(dim=1)
+        state = valid & (groups == 1)
+        visual_language = valid & (groups == 0)
+        if (not (state.sum(dim=1) == 1).all()
+                or (valid & (groups > 1)).any()
+                or not visual_language.any(dim=1).all()):
+            raise ValueError('Expected visual-language group zero followed by one state token')
+        # The official cumulative group mask blocks every group-zero query
+        # from the later state token. Keep that state in the moving flow path.
+        valid = visual_language
     if not valid.any(dim=1).all():
         raise ValueError('Every observation needs a valid prefix state token')
     positions = torch.arange(prefix_out.shape[1], device=prefix_out.device)

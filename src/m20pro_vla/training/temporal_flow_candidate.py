@@ -102,7 +102,8 @@ class TemporalFlowCoreCandidate(nn.Module):
         )
         if not isinstance(outputs[0], torch.Tensor):
             raise ValueError('VLM did not return its prefix hidden states')
-        return prefix_stop_logits(self.binary_stop_head, outputs[0], padding)
+        return prefix_stop_logits(self.binary_stop_head, outputs[0], padding,
+                                  self.binary_stop_spec, attention)
 
     def _binary_stop_view(self, images, masks):
         """Use one canonical observation-only prefix output for the learned head.
@@ -164,7 +165,8 @@ class TemporalFlowCoreCandidate(nn.Module):
                             raise ValueError('VLM did not return its prefix hidden states')
                         # Actual batch-one inference reuses its existing pass.
                         logits = prefix_stop_logits(
-                            candidate.binary_stop_head, outputs[0], capture['mask'])
+                            candidate.binary_stop_head, outputs[0], capture['mask'],
+                            candidate.binary_stop_spec, capture['attention'])
                     # Capture mutation happens once outside the checkpointed
                     # function. Backward recomputation never changes it.
                     candidate.last_stop_logits = logits
@@ -180,6 +182,10 @@ class TemporalFlowCoreCandidate(nn.Module):
                 return getattr(temporal_view, name)
 
             def embed_prefix(self, images, masks, lang_tokens, lang_masks, state=None):
+                from .binary_stop import VISUAL_LANGUAGE_SCHEMA
+                if candidate.binary_stop_spec['schema'] == VISUAL_LANGUAGE_SCHEMA:
+                    if lang_masks.dtype != torch.bool or not lang_masks.any(dim=1).all():
+                        raise ValueError('Visual-language STOP requires a valid task language token')
                 result = temporal_view.embed_prefix(images, masks, lang_tokens, lang_masks, state=state)
                 capture['embeddings'], capture['mask'], capture['attention'] = result
                 return result

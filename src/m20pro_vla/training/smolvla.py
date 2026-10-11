@@ -127,13 +127,17 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
     saved_binary = snapshot/'m20_binary_stop.json'
     if binary is not None:
         from .binary_stop import make_binary_stop_spec_from_saved, validate_binary_stop_spec
-        if binary != {'schema': 'm20_binary_stop_v1', 'initialize': True}:
+        if binary not in [
+                {'schema': 'm20_binary_stop_v1', 'initialize': True},
+                {'schema': 'm20_visual_language_binary_stop_v2', 'initialize': True}]:
             raise ValueError('Unknown binary STOP initialization request')
         if saved_binary.exists():
             raise ValueError('Cannot reinitialize an already trained binary STOP head')
         if objective is None or smolvla_temporal_spec(config) is None:
             raise ValueError('Binary STOP initialization requires physical temporal training')
-        spec = make_binary_stop_spec_from_saved(prepared)
+        schema = ('m20_observation_binary_stop_v1' if binary['schema'] == 'm20_binary_stop_v1'
+                  else binary['schema'])
+        spec = make_binary_stop_spec_from_saved(prepared, schema=schema)
         (prepared/'m20_binary_stop_init.json').write_text(json.dumps(validate_binary_stop_spec(spec),indent=2)+'\n')
     elif saved_binary.exists():
         from .binary_stop import validate_saved_normalization
