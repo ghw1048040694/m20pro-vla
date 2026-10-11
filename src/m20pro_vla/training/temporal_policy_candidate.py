@@ -74,6 +74,8 @@ def temporal_policy_class(base_policy_class):
             contract = dict(schema='m20_temporal_policy_candidate_v1', core=self.model.contract())
             (Path(directory)/CONTRACT_FILE).write_text(json.dumps(contract, indent=2)+'\n')
             objective = getattr(self, 'training_objective', None)
+            from .physical_flow_loss import validate_objective_context
+            validate_objective_context(None, objective, getattr(self.model, 'binary_stop_spec', None))
             if objective is not None:
                 from .physical_flow_loss import CONTRACT_FILE as OBJECTIVE_FILE, validate_objective
                 (Path(directory)/OBJECTIVE_FILE).write_text(json.dumps(validate_objective(objective), indent=2)+'\n')
@@ -150,6 +152,8 @@ def temporal_policy_class(base_policy_class):
                     raise ValueError('Binary STOP requires the explicit physical flow objective')
                 if head_init.exists():
                     policy.model.enable_binary_stop(binary)
+            from .physical_flow_loss import validate_objective_context
+            validate_objective_context(directory, policy.training_objective, binary)
             from .stop_decoding import load_stop_decoding
             decoding = load_stop_decoding(directory, binary)
             if decoding is not None:

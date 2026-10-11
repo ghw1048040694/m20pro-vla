@@ -159,6 +159,8 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
         spec = json.loads(saved_binary.read_text())
         validate_saved_normalization(prepared, spec)
         shutil.copy2(saved_binary, prepared/'m20_binary_stop.json')
+    from .physical_flow_loss import validate_objective_context
+    validate_objective_context(prepared, objective, spec if binary is not None or saved_binary.exists() else None)
     from .visual_connector_adaptation import load_connector_spec, save_connector_spec
     connector = settings.get('visual_connector_adaptation', load_connector_spec(snapshot))
     if connector is not None:

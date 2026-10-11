@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_relative_wheel_lr3_fit600_original_start_training3_diagnostic",
+  "stage": "s3_consumed_motion_flow_loss_bounded_fit600",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_reviewed7_with_corrections_v2_20261011",
@@ -10,9 +10,9 @@
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
-    "smolvla_prepared_base": ".runtime/cache/m20_s3_relative_wheel_lr3_from_human600_20261012",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_relative_wheel_lr3_current_stop_20261012",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_relative_wheel_lr3_training3_20261012",
+    "smolvla_prepared_base": ".runtime/cache/m20_s3_consumed_motion_from_human600_20261012",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_consumed_motion_fit600_20261012",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_consumed_motion_training3_20261012",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -116,7 +116,7 @@
         "rear"
       ]
     },
-    "learning_rate": 3e-05,
+    "learning_rate": 1e-05,
     "warmup_steps": 40,
     "raw_cache_dir": ".runtime/cache/raw_human_reviewed7_correction_v2_20261011",
     "execution_contract": {
@@ -148,18 +148,19 @@
     },
     "adaptation_scope": "reviewed_human",
     "training_objective": {
-      "schema": "m20_physical_flow_loss_v1",
+      "schema": "m20_consumed_motion_flow_loss_v2",
       "action_dim": 4,
       "model_action_dim": 32,
       "chunk_size": 50,
       "padding_key": "action_is_pad",
-      "reduction": "mean_of_per_sample_valid_time_axis_means",
-      "axis_weights": [
-        1,
-        1,
-        1,
-        1
-      ]
+      "reduction": "mean_of_per_sample_valid_time_sums_divided_by_four",
+      "consumed_axes": [
+        0,
+        2
+      ],
+      "denominator_axes": 4,
+      "required_binary_stop": "m20_visual_language_binary_stop_v2",
+      "lateral_processing": "saved_zero_mean_and_std"
     },
     "binary_stop": {
       "schema": "m20_visual_language_binary_stop_v2",
@@ -395,5 +396,5 @@
       }
     ]
   },
-  "pipeline_stage": "s3_relative_wheel_lr3_fit600_original_start_training3_diagnostic"
+  "pipeline_stage": "s3_consumed_motion_flow_loss_bounded_fit600"
 }
