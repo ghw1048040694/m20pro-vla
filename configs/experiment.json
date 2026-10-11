@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_human_keyboard_bounded_expert_fit1800",
+  "stage": "s3_human_fit1800_stop_support_training3_diagnostic",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
@@ -11,8 +11,8 @@
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
     "smolvla_prepared_base": ".runtime/cache/m20_s3_human_keyboard_from_human600_fit1800_20261011",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_fit1800_20261011",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_keyboard_fit1800_training3_20261011",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_fit1800_stop_support_20261011",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_fit1800_stop_support_training3_20261011",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -121,7 +121,7 @@
     "raw_cache_dir": ".runtime/cache/raw_human_keyboard_v1_20261011",
     "execution_contract": {
       "schema": "m20_execution_contract_v1",
-      "profile": "human_keyboard_v1",
+      "profile": "human_keyboard_stop_support_v2",
       "action_units": [
         "m/s",
         "m/s",
@@ -143,7 +143,8 @@
       "render": "interactive-v1: egl-llvmpipe, no shadows/reflections/MSAA",
       "motion": "keyboard_separate_axes_slew_50hz_v1",
       "stop_distance": 0.5,
-      "slow_distance": 1.25
+      "slow_distance": 1.25,
+      "stop_stance_rate_radps": 0.5
     },
     "adaptation_scope": "reviewed_human"
   },
