@@ -26,6 +26,11 @@ def experiment_low_level_environment(config: dict[str, Any]) -> dict[str, str]:
         if not policy.is_file():
             raise FileNotFoundError(f"Configured low-level policy is missing: {policy}")
         environment["M20_V5_POLICY_ONNX"] = str(policy)
+    execution = (config.get('smolvla') or {}).get('execution_contract')
+    if execution is not None:
+        from ..data.execution_contract import validate_execution_contract
+        validate_execution_contract(execution)
+        environment.update(MUJOCO_GL='egl', LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe')
     return environment
 
 
@@ -126,6 +131,10 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
     smolvla_backend = smolvla_dataset_backend(config)
     smolvla_dataset = smolvla_dataset_path(config)
     smolvla_output = Path(paths["smolvla_checkpoint_dir"])
+    human_review = None
+    if config['smolvla'].get('adaptation_scope') == 'reviewed_human':
+        from ..data.human_demonstrations import reviewed_human_source
+        human_review = reviewed_human_source(smolvla_dataset)
     return {
         "schema": "m20pro_vla_experiment_plan_v1",
         "experiment_id": config["experiment_id"],
@@ -155,6 +164,7 @@ def build_experiment_plan(config_path: Path = DEFAULT_EXPERIMENT_CONFIG) -> dict
                 "output_already_exists": checkpoint.exists(),
             },
             "train-smolvla": {
+                "human_source_review": human_review,
                 "dataset_backend": smolvla_backend,
                 "dataset": str(smolvla_dataset),
                 "dataset_ready": (bool(list(smolvla_dataset.glob('episode_*.npz'))) if smolvla_backend == 'raw'

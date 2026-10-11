@@ -20,4 +20,10 @@ python -m m20pro_vla.cli experiment --config configs/experiment.json --stage tel
 
 为交互使用 EGL llvmpipe 渲染，关闭阴影、反射和 MSAA；与历史渲染图像不保证逐位一致。元数据明确保存该渲染合同、实际 GL renderer、动作单位和范围、配置及来源 SHA。UI 显示实测处理帧率；原始仿真间隔始终 .02 秒，不将墙钟性能冒充 50 FPS。
 
-所有记录 training_ready=false，不以 episode_*.npz 命名，不自动进入训练。需先复核实际到达、停车、姿态、接触和人类示范质量，并适配新动作归一化、存档合同及执行范围。自动化验证轨迹另有工作区 receipt，不能作人类专家数据。
+所有原始记录 training_ready=false，不以 episode_*.npz 命名，不自动进入训练。需先复核实际到达、停车、姿态、接触和人类示范质量。自动化验证轨迹另有工作区 receipt，不能作人类专家数据。
+
+复核通过的示范可建立独立的 reviewed-human 原始 RGB 数据集，保留原记录和块的 SHA，不裁尾重标，也不将失败记录或测试轨迹混入。显式设置 `smolvla.adaptation_scope=reviewed_human` 时，既有 `train-smolvla` 使用该来源的完整性审查；它不代表旧的完整分布检查或独立验收通过。
+
+新模型随存档保存 `m20_execution_contract.json`，指定物理动作单位、前进 [-.25,.50] m/s、转向 [-.40,.40] rad/s、25 Hz 推理与 50 Hz 控制，以及录制时的渲染方式。执行器在每个 50 Hz 子步使用与键盘相同的平滑、分轴和方向保护，并保存两个子步的动作与接触。模型输出停车后继续观察，可以由新的移动输出复航。没有手写选房路线或目标坐标输入。
+
+实际 SmolVLA 的 32 维状态不含 previous_action；无需修改历史动作归一化。动作处理器统计只从新数据计算，旧数据和缓存保持原样。新模型先检查示范布局的闭环复现，再做独立泛化验收；少量熟悉布局上的成功不能代替完整 S3 验收。

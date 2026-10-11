@@ -103,6 +103,17 @@ def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
     )
     preprocessor.save_pretrained(prepared)
     postprocessor.save_pretrained(prepared)
+    # A temporal checkpoint already has wrapped model keys. Preserve its
+    # architecture sidecar when transferring weights into a new fine-tune.
+    from .temporal_policy_candidate import CONTRACT_FILE as TEMPORAL_FILE
+    if (snapshot / TEMPORAL_FILE).is_file():
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Temporal init policy requires temporal training')
+        shutil.copy2(snapshot / TEMPORAL_FILE, prepared / TEMPORAL_FILE)
+    from ..data.execution_contract import save_execution_contract
+    execution = settings.get('execution_contract')
+    if execution is not None:
+        save_execution_contract(prepared, execution)
     return prepared
 
 
@@ -153,6 +164,9 @@ def smolvla_training_command(
         "--policy.device=cuda",
         f"--policy.use_amp={str(bool(settings.get('use_amp', False))).lower()}",
         f"--policy.use_peft={str(bool(settings.get('use_peft', False))).lower()}",
+        *([f"--policy.optimizer_lr={settings['learning_rate']}"] if 'learning_rate' in settings else []),
+        *([f"--policy.scheduler_warmup_steps={settings['warmup_steps']}",
+           f"--policy.scheduler_decay_steps={settings['steps']}"] if 'warmup_steps' in settings else []),
         "--policy.push_to_hub=false",
         "--wandb.enable=false",
     ]

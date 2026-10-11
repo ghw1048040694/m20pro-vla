@@ -48,4 +48,6 @@ def make_temporal_policy_candidate(official_factory, config, dataset, *, require
     policy=invoke(cfg=config,ds_meta=dataset.meta)
     if not isinstance(policy, Candidate) or policy.model.spec != spec:
         raise ValueError('Returned policy sampling differs')
+    if getattr(policy, 'execution_contract', None) != getattr(dataset.meta, 'execution_contract', None):
+        raise ValueError('Loaded policy and training physical execution contracts differ')
     return policy

@@ -425,7 +425,8 @@ def command_experiment(args: argparse.Namespace) -> int:
             from .training import run_smolvla_training
 
             stage_plan = plan["stages"][stage]
-            if not plan["training"]["distribution_audit"]["passed"]:
+            source_review = stage_plan.get('human_source_review')
+            if not (source_review['passed'] if source_review is not None else plan["training"]["distribution_audit"]["passed"]):
                 raise RuntimeError("Source dataset failed distribution/quality audit; collect or filter episodes before SmolVLA training")
             if not stage_plan["dataset_ready"]:
                 raise FileNotFoundError(f"SmolVLA training dataset is missing: {stage_plan['dataset']}")

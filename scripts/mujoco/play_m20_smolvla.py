@@ -25,6 +25,7 @@ from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 from lerobot.utils.control_utils import predict_action
 
 from m20pro_vla.data.lerobot_adapter import m20_smolvla_state
+from m20pro_vla.data.execution_contract import load_execution_contract, physical_action
 from m20pro_vla.data.failure_recovery import capture_state, collect_continuations
 from m20pro_vla.data.visibility import target_pixel_count
 from m20pro_vla.eval.acceptance import (
@@ -306,7 +307,17 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         for obstacle in obstacles
     }
     obstacle_geom_ids.discard(-1)
-    controller = build_low_level_controller(model)
+    execution_contract = load_execution_contract(args.checkpoint)
+    if execution_contract is not None:
+        if args.sim_steps_per_action != 2 or not args.safety_shield:
+            raise ValueError('Human execution profile requires 25Hz policy, 50Hz control and directional protection')
+        if args.safety_stop_distance != .5 or args.safety_slow_distance != 1.25:
+            raise ValueError('Human execution profile requires its demonstrated directional distances')
+        if any(os.environ.get(k) != v for k,v in {'MUJOCO_GL':'egl','LIBGL_ALWAYS_SOFTWARE':'1','GALLIUM_DRIVER':'llvmpipe'}.items()):
+            raise ValueError('Run contracted human policy through the configured experiment rendering environment')
+        model.vis.quality.offsamples = 0
+    controller = build_low_level_controller(model, **(
+        {'teacher_motion_limits': (.5, .4), 'inference_threads': 1} if execution_contract else {}))
     controller.reset(
         data,
         float(metadata.get("initial_yaw", 0.0)),
@@ -324,12 +335,22 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         policy_bundle if policy_bundle is not None else load_policy(args.checkpoint, device, args.action_replan_steps)
     )
     policy.reset()
+    if getattr(policy, 'execution_contract', None) != execution_contract:
+        raise ValueError('Loaded policy and player execution contracts differ')
     from m20pro_vla.runtime.temporal_policy import TemporalRuntime
     temporal_runtime = (TemporalRuntime(policy, preprocessor, postprocessor, device)
                         if hasattr(policy.model, 'spec') else None)
 
     policy_width, policy_height = 160, 96
     policy_renderer = mujoco.Renderer(model, height=policy_height, width=policy_width)
+    gl_renderer = None
+    if execution_contract is not None:
+        policy_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        policy_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = False
+        from OpenGL import GL
+        gl_renderer = GL.glGetString(GL.GL_RENDERER).decode()
+        if 'llvmpipe' not in gl_renderer.lower():
+            raise ValueError('Human training RGB contract requires the llvmpipe renderer')
     demo_renderer = (
         mujoco.Renderer(model, height=args.height, width=args.width) if args.write_videos else None
     )
@@ -440,7 +461,8 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 robot_type="m20pro",
             )), confirming=stop_confirmation.pending)
             raw = action_tensor.detach().cpu().numpy()[0]
-            desired = executable_action(raw, args.stop_threshold)
+            desired = (physical_action(raw, args.stop_threshold) if execution_contract
+                       else executable_action(raw, args.stop_threshold))
             visual_stop_evidence = (
                 visible_pixels >= args.visual_stop_min_pixels
                 or (
@@ -463,7 +485,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 stop_step = -1
                 resume_event_count += 1
             stop_latched = stop_confirmation.latched
-            command = smooth_body_command(
+            command = desired.copy() if execution_contract else smooth_body_command(
                 previous_command,
                 desired,
                 alpha=args.motion_smoothing,
@@ -473,7 +495,7 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
             front_lidar = float(np.min(lidar[32:41]))
             minimum_front_lidar = min(minimum_front_lidar, front_lidar)
             shield_reason = "none"
-            if args.safety_shield:
+            if args.safety_shield and execution_contract is None:
                 command, shield_reason = lidar_safety_shield(
                     command,
                     lidar,
@@ -484,12 +506,29 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                     shield_intervention_count += 1
                 if shield_reason in {"emergency_stop", "invalid_lidar"}:
                     shield_emergency_count += 1
-            previous_command = command.copy()
+            if execution_contract is None:
+                previous_command = command.copy()
             raw_actions.append(raw.astype(float).tolist())
-            executed_actions.append(command.astype(float).tolist())
 
-            for _ in range(args.sim_steps_per_action):
+            control_actions = []
+            control_shields = []
+            control_contact = []
+            control_contact_names = set()
+            for substep in range(args.sim_steps_per_action):
+                if execution_contract is not None:
+                    from m20pro_vla.sim.keyboard_teleop import executed_request
+                    control_scan = lidar if substep == 0 else planar_lidar(model, data)
+                    command, shield_reason = executed_request(desired, previous_command, control_scan)
+                    previous_command = command.copy()
+                    shield_intervention_count += int(shield_reason != 'none')
+                    shield_emergency_count += int(shield_reason in {'emergency_stop', 'invalid_lidar'})
+                control_actions.append(command.astype(float).tolist())
+                control_shields.append(shield_reason)
                 diagnostics = controller.step(data, command)
+                if execution_contract is not None:
+                    raw_contacts = contacting_obstacles(model, data, obstacle_geom_ids)
+                    control_contact.append(bool(raw_contacts))
+                    control_contact_names.update(raw_contacts)
                 recovery_active_steps += int(diagnostics.safety_recovery_active)
                 forward_blocked_steps += int(
                     command[0] > 0.1 and float(np.linalg.norm(diagnostics.wheel_target)) < 1.0e-3
@@ -499,9 +538,10 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 roll_rates.append(float(data.qvel[3]))
                 pitch_rates.append(float(data.qvel[4]))
                 wheel_targets.append(diagnostics.wheel_target.astype(float).tolist())
+            executed_actions.append(command.astype(float).tolist())
 
-            contacts = contacting_obstacles(model, data, obstacle_geom_ids)
-            if contacts:
+            contacts = contacting_obstacles(model, data, obstacle_geom_ids) | control_contact_names
+            if contacts or any(control_contact):
                 obstacle_contact_step_count += 1
                 obstacle_contact_names.update(contacts)
                 if obstacle_first_contact_step < 0:
@@ -524,6 +564,8 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
                 target_reached_step = step
 
             trace_rows.append({
+                **({'raw_control_actions': control_actions, 'raw_control_shields': control_shields,
+                    'raw_control_contact': control_contact} if execution_contract else {}),
                 "step": step,
                 "observation_xy": observation_xy,
                 "observation_target_distance": float(np.linalg.norm(observation_xy - target_xy)),
@@ -628,6 +670,9 @@ def run_episode(args: argparse.Namespace, policy_bundle: tuple | None = None) ->
         "success_radius": float(args.success_radius),
         "sim_steps_per_action": int(args.sim_steps_per_action),
         "action_replan_steps": int(args.action_replan_steps),
+        "execution_contract": execution_contract,
+        "gl_renderer": gl_renderer,
+        "executed_action_trace_semantics": "last of two 50Hz commands; all commands in raw_control_actions" if execution_contract else "held 25Hz command",
         "fresh_stop_confirmation": fresh_stop_confirmation,
         "reversible_stop": reversible_stop,
         "stop_event_count": stop_event_count,

@@ -14,16 +14,28 @@ RAW_SETTINGS_ENV = 'M20PRO_RAW_TRAINING_SETTINGS'
 
 def raw_training_settings(config):
     settings = config['smolvla']
-    return dict(cache_root=str(Path(settings.get('raw_cache_dir', '.runtime/cache/raw_training')).resolve()),
+    result = dict(cache_root=str(Path(settings.get('raw_cache_dir', '.runtime/cache/raw_training')).resolve()),
         source_fps=int(settings['source_fps']), frame_stride=int(settings['frame_stride']),
         terminal_stop_repeat=int(settings.get('terminal_stop_repeat', 1)),
         recovery_terminal_stop_repeat=int(settings.get('recovery_terminal_stop_repeat', 1)),
         max_open_episodes=int(settings.get('raw_max_open_episodes', 4)))
+    if settings.get('execution_contract') is not None:
+        from ..data.execution_contract import validate_execution_contract
+        result['execution_contract'] = validate_execution_contract(settings['execution_contract'])
+    return result
 
 
 def make_raw_dataset(source, settings, policy=None):
     from ..data.raw_dataset import RawM20Dataset
+    from ..data.execution_contract import load_execution_contract
+    settings = dict(settings)
+    expected = settings.pop('execution_contract', None)
+    actual = load_execution_contract(source)
+    if actual != expected:
+        raise ValueError('Training source and configured execution contracts differ')
     dataset = RawM20Dataset(source, **settings)
+    dataset.execution_contract = actual
+    dataset.meta.execution_contract = actual
     if policy is not None:
         dataset.delta_indices = {}
         for key in dataset.meta.features:
@@ -37,11 +49,14 @@ def make_raw_dataset(source, settings, policy=None):
 
 def raw_training_contract(dataset):
     # Location-independent identities, including every cached artifact digest.
-    return dict(schema='m20pro_raw_training_contract_v1',
+    result = dict(schema='m20pro_raw_training_contract_v1',
         runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), settings=dataset.settings,
         frames=dataset.num_frames, episodes=dataset.num_episodes,
         records=[{key: record[key] for key in ('identity', 'contract', 'episode_id', 'task', 'mode', 'frames', 'artifacts')}
                  for record in dataset.records])
+    if getattr(dataset, 'execution_contract', None) is not None:
+        result['execution_contract'] = dataset.execution_contract
+    return result
 
 
 def validate_raw_resume_contract(output, dataset):

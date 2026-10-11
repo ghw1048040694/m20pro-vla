@@ -46,6 +46,10 @@ def temporal_policy_class(base_policy_class):
             super()._save_pretrained(directory)
             contract = dict(schema='m20_temporal_policy_candidate_v1', core=self.model.contract())
             (Path(directory)/CONTRACT_FILE).write_text(json.dumps(contract, indent=2)+'\n')
+            execution = getattr(self, 'execution_contract', None)
+            if execution is not None:
+                from ..data.execution_contract import save_execution_contract
+                save_execution_contract(directory, execution)
 
         @classmethod
         def from_pretrained(cls, pretrained_name_or_path, *, temporal_spec=None,
@@ -75,5 +79,7 @@ def temporal_policy_class(base_policy_class):
                 policy._enable_temporal_core()
             elif policy.model.contract() != contract['core']:
                 raise ValueError('Saved core identity/sampling contract differs')
+            from ..data.execution_contract import load_execution_contract
+            policy.execution_contract = load_execution_contract(directory)
             return policy
     return TemporalPolicyCandidate
