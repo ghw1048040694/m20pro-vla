@@ -1,7 +1,7 @@
 {
   "schema": "m20pro_vla_experiment_v1",
   "experiment_id": "m20_s3_v8_observe_temporal_raw_v1",
-  "stage": "s3_human600_stop_support_yellow_green_diagnostic",
+  "stage": "s3_human_keyboard_bounded_expert_fit1800",
   "paths": {
     "raw_dataset": ".runtime/datasets/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "dataset": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
@@ -10,9 +10,9 @@
     "eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1",
     "collection_videos": ".runtime/videos/m20_s3_v8_responsive_teacher_pilot3_20261010",
     "lerobot_dataset": ".runtime/lerobot/m20_s3_v8_multiroom_v1_curated",
-    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_keyboard_from_s3final_v1_20261011",
-    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_v1_stop_support_20261011",
-    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human600_stop_support_remaining2_20261011",
+    "smolvla_prepared_base": ".runtime/cache/m20_s3_human_keyboard_from_human600_fit1800_20261011",
+    "smolvla_checkpoint_dir": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_fit1800_20261011",
+    "smolvla_eval_dir": ".runtime/eval/smolvla_m20_s3_human_keyboard_fit1800_training3_20261011",
     "recovery_dataset": ".runtime/datasets/m20_s3_v8_multiroom_v1_new_corrections",
     "recovery_eval_dir": ".runtime/eval/m20_s3_v8_multiroom_v1_training_sources"
   },
@@ -92,14 +92,14 @@
     "vcodec": "h264",
     "video_backend": "pyav",
     "batch_size": 8,
-    "steps": 600,
+    "steps": 1800,
     "num_workers": 2,
     "log_freq": 10,
-    "save_freq": 300,
+    "save_freq": 600,
     "seed": 20260918,
     "use_amp": false,
     "use_peft": false,
-    "init_policy": ".runtime/checkpoints/smolvla_m20_s3_observe_temporal_raw_v1_steps10000/checkpoints/010000/pretrained_model",
+    "init_policy": ".runtime/checkpoints/smolvla_m20_s3_human_keyboard_v1_steps600_20261011/checkpoints/000600/pretrained_model",
     "offline": true,
     "recovery_terminal_stop_repeat": 1,
     "dataset_backend": "raw",
@@ -121,7 +121,7 @@
     "raw_cache_dir": ".runtime/cache/raw_human_keyboard_v1_20261011",
     "execution_contract": {
       "schema": "m20_execution_contract_v1",
-      "profile": "human_keyboard_stop_support_v2",
+      "profile": "human_keyboard_v1",
       "action_units": [
         "m/s",
         "m/s",
@@ -143,14 +143,13 @@
       "render": "interactive-v1: egl-llvmpipe, no shadows/reflections/MSAA",
       "motion": "keyboard_separate_axes_slew_50hz_v1",
       "stop_distance": 0.5,
-      "slow_distance": 1.25,
-      "stop_stance_rate_radps": 0.5
+      "slow_distance": 1.25
     },
     "adaptation_scope": "reviewed_human"
   },
   "smolvla_evaluation": {
     "episodes_dir": ".runtime/datasets/m20_s3_human_keyboard_reviewed3_raw_v1_20261011",
-    "episode_ids": "24001,24003",
+    "episode_ids": "24001,24002,24003",
     "policy_steps": 2500,
     "device": "cuda",
     "seed": 20261009,
@@ -164,8 +163,8 @@
     "post_stop_hold_steps": 25,
     "obstacle_contact_tolerance_steps": 10,
     "fresh_stop_confirmation": false,
-    "checkpoint_step": 600,
-    "episode_count": 2,
+    "checkpoint_step": 1800,
+    "episode_count": 3,
     "match_teacher_budget": false,
     "action_replan_steps": 10,
     "visual_stop_gate": false,
