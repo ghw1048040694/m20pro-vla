@@ -20,22 +20,28 @@ LOW_LEVEL_CONTRACT = "m20_low_level_v1"
 CONTROL_DT = 0.02
 PHYSICS_STEPS = 8
 WHEEL_RADIUS = 0.09
-WHEEL_COMMAND_SCALE = 2.0
-WHEEL_YAW_SCALE = 5.0
+WHEEL_COMMAND_SCALE = 1.0
+WHEEL_YAW_SCALE = 6.0
 WHEEL_YAW_RATE_FEEDBACK = 0.20
 WHEEL_TARGET_SLEW = 0.16
-WHEEL_YAW_TARGET_SLEW = 0.03
-WHEEL_NEGATIVE_YAW_TARGET_SLEW = 0.025
-WHEEL_STOP_TARGET_SLEW = 0.55
+WHEEL_YAW_TARGET_SLEW = 0.05
+WHEEL_NEGATIVE_YAW_TARGET_SLEW = 0.05
+WHEEL_STOP_TARGET_SLEW = 0.25
 STANCE_HEIGHT = 0.54
 STANCE_HEIGHT_KP = 0.25
 STANCE_HEIGHT_KD = 0.03
 STANCE_ATTITUDE_KP = 0.80
 STANCE_RATE_KD = 0.08
 MAX_LEG_STANCE_OFFSET = 0.16
+# Skid steering needs stronger attitude support than straight driving. Keep
+# that support active while a differential wheel target is still decaying;
+# otherwise a turn-to-stop transition removes support before yaw load is gone.
 TURN_STANCE_ATTITUDE_KP = 1.35
 TURN_STANCE_RATE_KD = 0.20
 TURN_MAX_LEG_STANCE_OFFSET = 0.24
+TURN_STANCE_DEADBAND = 0.0
+TURN_STANCE_RAMP = math.radians(0.01)
+TURN_STANCE_RELEASE_WHEEL_DELTA = 0.20
 # Short contact-triggered lift for low obstacle edges. The latch avoids
 # chattering while a wheel crosses an obstacle.
 TERRAIN_LIFT_HIP_OFFSET = 0.28
@@ -49,7 +55,7 @@ TERRAIN_TARGET_SLEW = 1.20
 TERRAIN_RECOVERY_TILT = math.radians(10.0)
 TERRAIN_RECOVERY_CLEAR_TILT = math.radians(4.0)
 SAFETY_RECOVERY_HEIGHT = 0.48
-SAFETY_RECOVERY_CLEAR_HEIGHT = 0.515
+SAFETY_RECOVERY_CLEAR_HEIGHT = 0.490
 
 JOINT_NAMES = (
     "fl_hipx_joint", "fl_hipy_joint", "fl_knee_joint", "fl_wheel_joint",
@@ -236,19 +242,33 @@ class M20LowLevelController:
         roll, pitch = self._attitude(data)
         angular_velocity = data.qvel[3:6]
         height_error = (STANCE_HEIGHT + float(height_offset)) - float(data.qpos[2])
-        attitude_kp = TURN_STANCE_ATTITUDE_KP if turning else STANCE_ATTITUDE_KP
-        rate_kd = TURN_STANCE_RATE_KD if turning else STANCE_RATE_KD
-        max_offset = TURN_MAX_LEG_STANCE_OFFSET if turning else MAX_LEG_STANCE_OFFSET
-        roll_command = np.clip(
-            -attitude_kp * roll - rate_kd * angular_velocity[0],
-            -max_offset,
-            max_offset,
-        )
-        pitch_command = np.clip(
-            -attitude_kp * pitch - rate_kd * angular_velocity[1],
-            -max_offset,
-            max_offset,
-        )
+        if turning:
+            max_offset = TURN_MAX_LEG_STANCE_OFFSET
+
+            def turn_correction(angle: float, rate: float) -> float:
+                magnitude = max(abs(angle) - TURN_STANCE_DEADBAND, 0.0)
+                activation = float(np.clip(magnitude / TURN_STANCE_RAMP, 0.0, 1.0))
+                error = math.copysign(magnitude, angle)
+                return float(np.clip(
+                    -TURN_STANCE_ATTITUDE_KP * error - TURN_STANCE_RATE_KD * activation * rate,
+                    -max_offset,
+                    max_offset,
+                ))
+
+            roll_command = turn_correction(roll, float(angular_velocity[0]))
+            pitch_command = turn_correction(pitch, float(angular_velocity[1]))
+        else:
+            max_offset = MAX_LEG_STANCE_OFFSET
+            roll_command = np.clip(
+                -STANCE_ATTITUDE_KP * roll - STANCE_RATE_KD * angular_velocity[0],
+                -max_offset,
+                max_offset,
+            )
+            pitch_command = np.clip(
+                -STANCE_ATTITUDE_KP * pitch - STANCE_RATE_KD * angular_velocity[1],
+                -max_offset,
+                max_offset,
+            )
         height_command = np.clip(
             STANCE_HEIGHT_KP * height_error - STANCE_HEIGHT_KD * float(data.qvel[2]),
             -0.08,
@@ -334,16 +354,17 @@ class M20LowLevelController:
         else:
             slew = WHEEL_TARGET_SLEW
         self.wheel_target += np.clip(desired - self.wheel_target, -slew, slew)
+        differential_wheel_target = float(np.ptp(self.wheel_target))
         stance_pose = self.stance_pose(
             data,
             turning=(
                 abs(yaw) > 1e-4
+                or differential_wheel_target > TURN_STANCE_RELEASE_WHEEL_DELTA
                 or terrain_lift_active
                 or terrain_contact_active
                 or self.safety_recovery_active
-                or safety_stop
             ),
-            height_offset=0.05 if safety_stop else 0.0,
+            height_offset=0.0,
         )
         for index, actuator in enumerate(self.leg_actuator_ids):
             data.ctrl[actuator] = stance_pose[index + (index // 3)]

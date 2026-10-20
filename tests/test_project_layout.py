@@ -15,12 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ProjectLayoutTest(unittest.TestCase):
-    def test_canonical_mujoco_cli_and_compatibility_entrypoint_exist(self):
+    def test_canonical_mujoco_cli_and_experiment_config_exist(self):
         self.assertTrue((ROOT / "src/m20pro_vla/cli.py").is_file())
         self.assertTrue((ROOT / "src/m20pro_vla/runtime/run_context.py").is_file())
+        self.assertTrue((ROOT / "src/m20pro_vla/runtime/experiment.py").is_file())
+        self.assertTrue((ROOT / "configs/experiment.json").is_file())
         self.assertTrue((ROOT / "scripts/mujoco/train_m20_mujoco_vla.py").is_file())
-        self.assertTrue((ROOT / "scripts/train_m20_mujoco_vla.py").is_file())
-        self.assertTrue((ROOT / "scripts/mujoco/evaluate_m20_rough_terrain_controller.py").is_file())
         self.assertTrue((ROOT / "docs/PROJECT_LAYOUT.md").is_file())
 
     @unittest.skipUnless(torch is not None, "optional VLA dependencies are not installed")

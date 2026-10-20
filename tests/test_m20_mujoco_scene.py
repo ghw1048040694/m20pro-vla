@@ -9,8 +9,13 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from m20pro_vla.low_level import M20LowLevelController
+from m20pro_vla.low_level import (
+    M20LowLevelController,
+    M20V5PolicyController,
+    resolve_onnx_path,
+)
 from m20pro_vla.planning import SearchMPCConfig, SearchMPCPlanner
+from m20pro_vla.planning.search_mpc import _route_command
 from m20pro_vla.sim.mujoco import (
     ASSET,
     ObjectSpec,
@@ -24,6 +29,23 @@ from m20pro_vla.sim.mujoco import (
 
 
 class MuJoCoSceneTest(unittest.TestCase):
+    def test_search_final_approach_uses_slow_arc_instead_of_skid_turn(self) -> None:
+        bearing = 0.75
+        for distance, expected_forward in ((0.67, 0.08), (0.70, 0.08), (1.00, 0.0)):
+            with self.subTest(distance=distance):
+                goal = np.array((distance * np.cos(bearing), distance * np.sin(bearing)))
+                command, _, measured_bearing = _route_command(
+                    np.zeros(2),
+                    0.0,
+                    goal,
+                    distance,
+                    final_approach=True,
+                )
+                self.assertAlmostEqual(measured_bearing, bearing)
+                self.assertEqual(command.forward, expected_forward)
+                self.assertEqual(command.yaw, 0.15)
+                self.assertFalse(command.stop)
+
     def test_obstacle_blocks_forward_line_of_sight(self) -> None:
         obstacle = ObstacleSpec(
             name="search_wall",
@@ -69,6 +91,20 @@ class MuJoCoSceneTest(unittest.TestCase):
             self.assertEqual(light_node.attrib["diffuse"], "0.7000 0.8000 0.9000")
             self.assertEqual(light_node.attrib["ambient"], "0.0300 0.0400 0.0500")
             self.assertEqual(light_node.attrib["specular"], "0.0100 0.0200 0.0300")
+
+    @unittest.skipUnless(ASSET.is_file(), "MuJoCo asset is not built")
+    def test_policy_cameras_are_upright(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scene_path = Path(tmp) / "scene.xml"
+            build_scene(scene_path, [], obstacles=[], task_object_collisions=False)
+            root = ET.parse(scene_path).getroot()
+            front = root.find(".//camera[@name='front_rgb']")
+            rear = root.find(".//camera[@name='rear_rgb']")
+            self.assertIsNotNone(front)
+            self.assertIsNotNone(rear)
+            assert front is not None and rear is not None
+            self.assertEqual(front.attrib["xyaxes"], "0 -1 0 0.174 0 0.985")
+            self.assertEqual(rear.attrib["xyaxes"], "0 1 0 -0.174 0 0.985")
 
     def test_search_layout_templates_are_occluded(self) -> None:
         ns = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/mujoco/collect_m20_mujoco_vla.py"))
@@ -344,42 +380,6 @@ class MuJoCoSceneTest(unittest.TestCase):
         self.assertEqual(summary["strict_pass_count"], 1)
         self.assertFalse(summary["passed"])
 
-    def test_hidden_objectnav_manifest_is_occluded_and_search_required(self) -> None:
-        ns = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/m20_indoor_scenarios.py"))
-        manifest = ns["build_manifest"](include_hidden_search=True)
-        summary = ns["validate_manifest"](manifest)
-        self.assertEqual(summary["schema"], "m20pro_hidden_objectnav_scenarios_v1")
-        self.assertEqual(summary["training_scenes"], 8)
-        self.assertEqual(len(manifest["episodes"]), 156)
-        self.assertEqual(summary["hidden_search_families"], 4)
-        hidden_scenes = [scene for scene in manifest["scenes"] if scene["split"].startswith("hidden_")]
-        self.assertEqual(len(hidden_scenes), 12)
-        self.assertEqual(
-            len({scene["search_family_id"] for scene in hidden_scenes}),
-            4,
-        )
-        for scene in hidden_scenes:
-            screen = next(item for item in scene["geometry"] if item["id"] == "search_screen")
-            self.assertTrue(all(not slot["visible_at_start"] for slot in scene["target_slots"]))
-            self.assertTrue(any(slot["id"] in {"hidden_a", "hidden_b"} for slot in scene["target_slots"]))
-            episode = next(item for item in manifest["episodes"] if item["scene_id"] == scene["id"])
-            resolved = ns["resolve_episode"](manifest, episode["id"])
-            self.assertTrue(resolved["search_required"])
-            self.assertFalse(resolved["target_visible_at_start"])
-            self.assertEqual(resolved["search_family_id"], scene["search_family_id"])
-            start_xy = tuple(float(value) for value in resolved["start_slot"]["position"][:2])
-            target_xy = tuple(float(value) for value in resolved["target_slot"]["position"][:2])
-            center = tuple(float(value) for value in screen["position"][:2])
-            half = tuple(float(value) for value in screen["size"][:2])
-            self.assertTrue(
-                segment_intersects_aabb(
-                    start_xy,
-                    target_xy,
-                    (center[0] - half[0], center[1] - half[1]),
-                    (center[0] + half[0], center[1] + half[1]),
-                )
-            )
-
     @unittest.skipUnless(ASSET.is_file(), "MuJoCo asset is not built")
     def test_low_level_reset_accepts_initial_xy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -510,6 +510,122 @@ class MuJoCoSceneTest(unittest.TestCase):
             self.assertFalse(bool(info["goal_is_target"]))
             planning_goal = np.asarray(info["planning_goal"], dtype=np.float64)
             self.assertGreater(planning_goal[0], 1.0)
+
+    def _planner_rollout_probe_scene(
+        self,
+        tmp: str,
+        target_xy: np.ndarray,
+        obstacles: list[ObstacleSpec],
+    ) -> tuple[mujoco.MjModel, mujoco.MjData]:
+        """Build the minimal occluded-target scene the rollout tests need."""
+        objects = [
+            ObjectSpec(
+                name="red_cube",
+                label="red cube",
+                kind="box",
+                position=(float(target_xy[0]), float(target_xy[1])),
+                rgba=(0.90, 0.08, 0.05, 1.0),
+                size=(0.16, 0.16, 0.16),
+            )
+        ]
+        scene_path = Path(tmp) / "scene.xml"
+        build_scene(
+            scene_path,
+            objects,
+            obstacles=obstacles,
+            task_object_collisions=False,
+        )
+        model = mujoco.MjModel.from_xml_path(str(scene_path))
+        return model, mujoco.MjData(model)
+
+    def _rollout_probe_inputs(self) -> tuple[np.ndarray, list[ObstacleSpec]]:
+        blocker = ObstacleSpec(
+            name="screen",
+            kind="box",
+            position=(1.50, 0.00, 0.50),
+            size=(0.08, 0.24, 0.50),
+        )
+        return np.array((3.50, 0.00), dtype=np.float64), [blocker]
+
+    @unittest.skipUnless(ASSET.is_file(), "MuJoCo asset is not built")
+    def test_search_planner_rollout_follows_the_executor(self) -> None:
+        """The rollout model is whatever executes, never a hardcoded class."""
+        target_xy, obstacles = self._rollout_probe_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            model, data = self._planner_rollout_probe_scene(tmp, target_xy, obstacles)
+            controller = M20LowLevelController(model)
+            controller.reset(data, 0.0)
+            planner = SearchMPCPlanner(
+                model,
+                target_xy,
+                obstacles,
+                SearchMPCConfig(use_route_planner_when_obstacles=False),
+            )
+            self.assertEqual(planner._executor_backend(controller), "analytic")
+            rollout = planner._rollout_controller(controller)
+            self.assertIs(type(rollout), M20LowLevelController)
+            # One instance is shared by every candidate sequence.
+            self.assertIs(planner._rollout_controller(controller), rollout)
+            command, info = planner.recommend(data, controller)
+            self.assertEqual(command.shape, (4,))
+            self.assertGreater(len(info["candidate_scores"]), 0)
+
+    @unittest.skipUnless(ASSET.is_file(), "MuJoCo asset is not built")
+    def test_search_planner_rollout_uses_the_executing_v5_expert(self) -> None:
+        """A v5 episode must also *predict* with v5, not with the analytic law."""
+        try:
+            import onnxruntime  # noqa: F401
+        except ImportError:
+            self.skipTest("onnxruntime is not installed")
+        if not resolve_onnx_path().is_file():
+            self.skipTest("v5 policy weights are not present")
+        target_xy, obstacles = self._rollout_probe_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            model, data = self._planner_rollout_probe_scene(tmp, target_xy, obstacles)
+            controller = M20V5PolicyController(model)
+            controller.reset(data, 0.0)
+            planner = SearchMPCPlanner(
+                model,
+                target_xy,
+                obstacles,
+                SearchMPCConfig(use_route_planner_when_obstacles=False),
+            )
+            self.assertEqual(planner._executor_backend(controller), "v5")
+            self.assertIs(
+                type(planner._rollout_controller(controller)),
+                M20V5PolicyController,
+            )
+            command, info = planner.recommend(data, controller)
+            self.assertEqual(command.shape, (4,))
+            self.assertGreater(len(info["candidate_scores"]), 0)
+
+    @unittest.skipUnless(ASSET.is_file(), "MuJoCo asset is not built")
+    def test_search_planner_rejects_a_rollout_backend_mismatch(self) -> None:
+        """Pinning a backend that disagrees with the executor must fail loudly."""
+        target_xy, obstacles = self._rollout_probe_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            model, data = self._planner_rollout_probe_scene(tmp, target_xy, obstacles)
+            controller = M20LowLevelController(model)
+            controller.reset(data, 0.0)
+            pinned = SearchMPCPlanner(
+                model,
+                target_xy,
+                obstacles,
+                SearchMPCConfig(use_route_planner_when_obstacles=False, backend="v5"),
+            )
+            with self.assertRaises(TypeError):
+                pinned.recommend(data, controller)
+            unknown = SearchMPCPlanner(
+                model,
+                target_xy,
+                obstacles,
+                SearchMPCConfig(
+                    use_route_planner_when_obstacles=False,
+                    backend="does-not-exist",
+                ),
+            )
+            with self.assertRaises(ValueError):
+                unknown.recommend(data, controller)
 
 
 if __name__ == "__main__":

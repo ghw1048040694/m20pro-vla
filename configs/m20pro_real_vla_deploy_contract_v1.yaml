@@ -1,0 +1,90 @@
+schema: m20pro_real_vla_deploy_contract_v1
+purpose: contract_between_m20pro_vla_training_and_m20pro_3d_nav_runtime
+
+map_policy:
+  per_dddmr_map_lora_required: false
+  lora_scope: domain_or_sensor_distribution_shift_only
+  dddmr_map_role: geometry_localization_mapping_and_obstacle_execution
+  vla_role: language_visual_local_decision_and_short_subgoal_proposal
+
+runtime_modes:
+  shadow:
+    allowed_first: true
+    publishes_motion: false
+    required_before_any_motion: true
+  dddmr_subgoal:
+    preferred_first_motion_mode: true
+    publishes_motion: false
+    output: short_horizon_navigate_to_pose_3d_goal
+    executor: M20Pro-3D-Nav DDDMR action bridge
+  supervised_velocity:
+    allowed_after_shadow_and_subgoal: true
+    output: body_command_converted_to_twist
+    executor: M20Pro-3D-Nav command supervisor and command mux
+
+observation_contract:
+  required:
+    front_rgb:
+      source: rtsp_or_ros_image
+      dtype: uint8
+      layout: HWC_RGB
+    rear_rgb:
+      source: rtsp_or_ros_image
+      dtype: uint8
+      layout: HWC_RGB
+    lidar_72:
+      source: ros_scan_or_edge_cloud_downsample
+      dtype: float32
+      shape: [72]
+      max_range_m: 10.0
+    proprio:
+      source: m20pro_tcp_bridge_pose_twist_and_command_history
+      dtype: float32
+      shape: [45]
+    language_instruction:
+      encoding: utf8_byte_v1
+      token_length: 64
+    history:
+      source: previous_action_and_visual_progress_features
+  prohibited:
+    - dddmr_map_point_index
+    - target_global_pose_as_policy_input
+    - simulator_object_pose
+    - semantic_mask_as_privileged_truth
+
+body_command_contract:
+  fields: [forward_mps, lateral_mps, yaw_radps, stop]
+  sim_training_limits:
+    forward_mps: [-0.40, 0.40]
+    lateral_mps: [-0.20, 0.20]
+    yaw_radps: [-0.15, 0.15]
+  first_real_velocity_limits:
+    forward_mps: [-0.05, 0.08]
+    lateral_mps: [0.0, 0.0]
+    yaw_radps: [-0.15, 0.15]
+    max_command_duration_s: 3.0
+  stop_semantics: stop_or_safety_recovery_latches_zero_motion
+
+subgoal_contract:
+  output_frame: map
+  max_first_test_distance_m: 1.0
+  max_first_test_yaw_rad: 0.5
+  requires_dddmr_field_test_ready: true
+  requires_localization_confirmed: true
+  requires_edge_cloud_fresh: true
+  requires_command_mux_idle: true
+
+export_package:
+  manifest: manifest.json
+  contract: m20pro_real_vla_deploy_contract_v1.yaml
+  checkpoint_copy_default: false
+  checkpoint_reference_allowed: true
+  required_consumer: M20Pro-3D-Nav m20pro_vla_bridge
+
+acceptance:
+  first_integration_mode: shadow
+  shadow_min_runtime_minutes: 10
+  shadow_requires_finite_actions: true
+  shadow_requires_no_unexplained_stop_spam: true
+  motion_requires_operator_present: true
+  motion_requires_physical_estop_ready: true

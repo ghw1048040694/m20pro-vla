@@ -10,12 +10,19 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+import yaml
 
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 ASSET_DIR = WORKSPACE / ".runtime/mujoco_assets"
 DEFAULT_INPUT = ASSET_DIR / "M20_compiled.xml"
 DEFAULT_OUTPUT = ASSET_DIR / "M20_floating_actuated.xml"
+DEFAULT_CONTRACT = WORKSPACE / "configs/m20pro_low_level_v1.yaml"
+
+LEG_KP = 80.0
+DEFAULT_LEG_KV = 0.0
+DEFAULT_WHEEL_KV = 0.3
+DEFAULT_WHEEL_GROUND_FRICTION = 1.2
 
 LEG_JOINTS = (
     "fl_hipx_joint", "fl_hipy_joint", "fl_knee_joint",
@@ -30,11 +37,75 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--contract", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--steps", type=int, default=480)
     return parser.parse_args()
 
 
-def add_dynamics_elements(root: ET.Element) -> None:
+def load_dynamics_contract(contract_path: Path) -> tuple[dict[str, float], float, float]:
+    """Read the leg/wheel actuator gains from the single low-level contract.
+
+    The contract YAML is the only authority for bottom-controller gains. Keeping
+    the generator on the same file removes the class of drift where the contract
+    documents one damping value while the built asset silently carries another.
+
+    ``leg_position_actuator_kv`` accepts either one number applied to all twelve
+    leg joints, or a mapping with ``hipx``/``hipy``/``knee`` entries so a single
+    joint group can be damped without stiffening the whole stance.
+    """
+    if not contract_path.is_file():
+        raise FileNotFoundError(f"Missing low-level contract: {contract_path}")
+    contract = yaml.safe_load(contract_path.read_text(encoding="utf-8")) or {}
+    feedback = contract.get("feedback") or {}
+    raw_leg_kv = feedback.get("leg_position_actuator_kv", DEFAULT_LEG_KV)
+    wheel_kv = feedback.get("wheel_velocity_actuator_kv", DEFAULT_WHEEL_KV)
+    wheel_ground_friction = feedback.get(
+        "wheel_ground_sliding_friction", DEFAULT_WHEEL_GROUND_FRICTION
+    )
+
+    def _check(name: str, value: object) -> float:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise ValueError(f"{name} must be a finite non-negative number, got {value!r}")
+        if not np.isfinite(value) or value < 0.0:
+            raise ValueError(f"{name} must be a finite non-negative number, got {value!r}")
+        return float(value)
+
+    if isinstance(raw_leg_kv, dict):
+        unknown = set(raw_leg_kv) - {"hipx", "hipy", "knee"}
+        if unknown:
+            raise ValueError(f"Unknown leg joint group(s) in leg_position_actuator_kv: {sorted(unknown)}")
+        leg_kv = {
+            group: _check(f"leg_position_actuator_kv.{group}", raw_leg_kv.get(group, DEFAULT_LEG_KV))
+            for group in ("hipx", "hipy", "knee")
+        }
+    else:
+        value = _check("leg_position_actuator_kv", raw_leg_kv)
+        leg_kv = {group: value for group in ("hipx", "hipy", "knee")}
+    return (
+        leg_kv,
+        _check("wheel_velocity_actuator_kv", wheel_kv),
+        _check("wheel_ground_sliding_friction", wheel_ground_friction),
+    )
+
+
+def leg_kv_for(joint: str, leg_kv: dict[str, float]) -> float:
+    for group in ("hipx", "hipy", "knee"):
+        if joint.endswith(f"{group}_joint"):
+            return leg_kv[group]
+    raise ValueError(f"Cannot map leg joint to a damping group: {joint}")
+
+
+def add_dynamics_elements(
+    root: ET.Element,
+    *,
+    leg_kv: dict[str, float],
+    wheel_kv: float,
+    wheel_ground_friction: float,
+) -> None:
+    compiler = root.find("compiler")
+    if compiler is None:
+        raise ValueError("Compiled MJCF has no compiler")
+    compiler.set("meshdir", str(WORKSPACE / "src" / "m20pro_description" / "meshes"))
     root.insert(1, ET.Element("option", {"timestep": "0.0025", "integrator": "implicitfast"}))
     worldbody = root.find("worldbody")
     if worldbody is None:
@@ -47,11 +118,18 @@ def add_dynamics_elements(root: ET.Element) -> None:
         "name": "ground",
         "type": "plane",
         "size": "0 0 0.1",
-        "friction": "1.2 0.005 0.0001",
+        "friction": f"{wheel_ground_friction:g} 0.005 0.0001",
         "rgba": "0.18 0.20 0.23 1",
     }))
     base.set("pos", "0 0 0.60")
     base.insert(1, ET.Element("freejoint", {"name": "base_free"}))
+    for wheel_name in ("fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel"):
+        wheel = base.find(f".//body[@name='{wheel_name}']")
+        if wheel is None:
+            raise ValueError(f"Compiled MJCF has no {wheel_name} body")
+        for geom in wheel.findall("geom"):
+            if geom.get("contype", "1") != "0":
+                geom.set("friction", f"{wheel_ground_friction:g} 0.005 0.0001")
 
     joint_ranges = {
         joint.get("name"): joint.get("range")
@@ -65,7 +143,8 @@ def add_dynamics_elements(root: ET.Element) -> None:
         actuator.append(ET.Element("position", {
             "name": f"{joint}_position",
             "joint": joint,
-            "kp": "80",
+            "kp": f"{LEG_KP:g}",
+            "kv": f"{leg_kv_for(joint, leg_kv):g}",
             "ctrllimited": "true",
             "ctrlrange": joint_ranges[joint],
             "forcelimited": "true",
@@ -75,7 +154,7 @@ def add_dynamics_elements(root: ET.Element) -> None:
         actuator.append(ET.Element("velocity", {
             "name": f"{joint}_velocity",
             "joint": joint,
-            "kv": "0.3",
+            "kv": f"{wheel_kv:g}",
             "ctrllimited": "true",
             "ctrlrange": "-20 20",
             "forcelimited": "true",
@@ -96,7 +175,14 @@ def main() -> None:
 
     tree = ET.parse(input_path)
     root = tree.getroot()
-    add_dynamics_elements(root)
+    contract_path = args.contract.resolve()
+    leg_kv, wheel_kv, wheel_ground_friction = load_dynamics_contract(contract_path)
+    add_dynamics_elements(
+        root,
+        leg_kv=leg_kv,
+        wheel_kv=wheel_kv,
+        wheel_ground_friction=wheel_ground_friction,
+    )
     ET.indent(tree, space="  ")
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
@@ -117,6 +203,14 @@ def main() -> None:
         "schema": "m20pro_mujoco_floating_asset_v1",
         "input_mjcf": str(input_path),
         "output_mjcf": str(output_path),
+        "low_level_contract": str(contract_path),
+        "leg_position_actuator_kp": LEG_KP,
+        "leg_position_actuator_kv": leg_kv,
+        "leg_position_actuator_kv_uniform": (
+            next(iter(leg_kv.values())) if len(set(leg_kv.values())) == 1 else None
+        ),
+        "wheel_velocity_actuator_kv": wheel_kv,
+        "wheel_ground_sliding_friction": wheel_ground_friction,
         "mujoco_version": mujoco.__version__,
         "njnt": model.njnt,
         "nq": model.nq,

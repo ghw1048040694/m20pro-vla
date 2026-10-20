@@ -1,5 +1,6 @@
 """Predictive planning helpers for MuJoCo search curricula."""
 
+from .global_planner import GlobalPlan, GlobalPlanner, GlobalPlannerConfig
 from .search_mpc import (
     SearchMPCConfig,
     SearchMPCPlanner,
@@ -9,6 +10,9 @@ from .search_mpc import (
 )
 
 __all__ = [
+    "GlobalPlan",
+    "GlobalPlanner",
+    "GlobalPlannerConfig",
     "SearchMPCConfig",
     "SearchMPCPlanner",
     "clone_data",

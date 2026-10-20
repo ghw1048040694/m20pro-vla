@@ -30,7 +30,7 @@ from m20pro_vla.sim.mujoco import (
     planar_lidar,
     proprioception,
 )
-from m20pro_vla.low_level import M20LowLevelController
+from m20pro_vla.low_level import build_low_level_controller
 from m20pro_vla.planning import SearchMPCConfig, SearchMPCPlanner
 from m20pro_vla.policies import M20MuJoCoVLA, PHASE_LABELS, encode_text
 from m20pro_vla.world_model import (
@@ -504,7 +504,7 @@ def run_episode(args: argparse.Namespace) -> dict:
     )
     model = mujoco.MjModel.from_xml_path(str(scene_path))
     data = mujoco.MjData(model)
-    controller = M20LowLevelController(model)
+    controller = build_low_level_controller(model)
     search_planner = None
     if args.decision_mode in {"search_mpc", "phase_routed"}:
         search_planner = SearchMPCPlanner(

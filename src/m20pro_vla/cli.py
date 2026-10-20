@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,11 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 
 from . import __version__
 from .runtime import RunContext, default_runtime_root
-from .runtime.compat import COMPATIBILITY_SCRIPTS, run_compatibility_script
+from .runtime.compat import run_compatibility_script
+from .runtime.run_context import workspace_root
+
+
+SMOLVLA_STAGE_ENV_GUARD = "M20PRO_VLA_SMOLVLA_STAGE_ENV"
 
 
 def _runtime_args(parser: argparse.ArgumentParser) -> None:
@@ -57,13 +62,49 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--turn-steps", type=int, default=180)
     gate.add_argument("--turn-command", type=float, default=0.10)
 
-    for name in COMPATIBILITY_SCRIPTS:
-        workflow = subparsers.add_parser(
-            name,
-            help=f"Run the {name} workflow through its recorded compatibility entry point",
-        )
-        _runtime_args(workflow)
-        workflow.add_argument("extra", nargs=argparse.REMAINDER, help="Arguments forwarded to the canonical workflow entry point")
+    export = subparsers.add_parser(
+        "export-policy",
+        help="Export a policy manifest for M20Pro-3D-Nav shadow or supervised deployment",
+    )
+    _runtime_args(export)
+    export.add_argument("--checkpoint", type=Path, help="Checkpoint to describe or package")
+    export.add_argument("--output-dir", type=Path, help="Export directory; defaults to the current run directory")
+    export.add_argument("--policy-id", help="Stable deployment label; defaults to the checkpoint parent directory")
+    export.add_argument("--real-contract", type=Path, default=Path("configs/m20pro_real_vla_deploy_contract_v1.yaml"))
+    export.add_argument("--copy-checkpoint", action="store_true", help="Copy checkpoint bytes into the export directory")
+    export.add_argument("--image-width", type=int, default=160)
+    export.add_argument("--image-height", type=int, default=96)
+    export.add_argument("--target-runtime", choices=("shadow", "dddmr-subgoal", "supervised-velocity"), default="shadow")
+    export.add_argument("--notes", default="")
+
+    experiment = subparsers.add_parser(
+        "experiment",
+        help="Run every experiment stage from one versioned configuration file",
+    )
+    _runtime_args(experiment)
+    experiment.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/experiment.json"),
+    )
+    experiment.add_argument(
+        "--stage",
+        choices=(
+            "plan",
+            "collect",
+            "teleop-record",
+            "curate",
+            "audit",
+            "convert",
+            "train",
+            "train-smolvla",
+            "smolvla-eval",
+            "collect-recovery",
+            "eval",
+            "gate",
+        ),
+        default="plan",
+    )
 
     report = subparsers.add_parser("report", help="Summarize completed unified runs")
     _runtime_args(report)
@@ -78,6 +119,8 @@ def _print(payload: Any, compact: bool = False) -> None:
 def _context(args: argparse.Namespace, kind: str, config: dict[str, Any]) -> RunContext | None:
     if args.dry_run:
         return None
+    if getattr(args, "command", None) == "experiment":
+        config = {**config, "experiment": json.loads(args.config.read_text(encoding="utf-8"))}
     return RunContext.create(
         kind,
         [sys.executable, *sys.argv],
@@ -214,22 +257,234 @@ def command_low_level_gate(args: argparse.Namespace) -> int:
         return _finish(context, False, {"schema": "m20pro_vla_low_level_gate_v1"}, exc, compact=getattr(args, "json", False))
 
 
-def command_compatibility(args: argparse.Namespace) -> int:
+def command_export_policy(args: argparse.Namespace) -> int:
     context: RunContext | None = None
     try:
-        config = {"forwarded_args": list(args.extra), "compatibility_script": str(COMPATIBILITY_SCRIPTS[args.command])}
+        from .deploy import create_policy_export, policy_export_plan
+
         if args.dry_run:
-            return _finish(
-                None,
-                True,
-                {"schema": "m20pro_vla_compat_plan_v1", "workflow": args.command, "config": config, "dry_run": True},
-                compact=args.json,
+            report = policy_export_plan(
+                checkpoint=args.checkpoint,
+                output_dir=args.output_dir,
+                policy_id=args.policy_id,
+                real_contract=args.real_contract,
+                copy_checkpoint=args.copy_checkpoint,
+                image_width=args.image_width,
+                image_height=args.image_height,
+                target_runtime=args.target_runtime,
             )
-        context = _context(args, args.command, config)
-        report = run_compatibility_script(args.command, args.extra, context)
+            report["dry_run"] = True
+            return _finish(None, True, report, compact=args.json)
+        if args.checkpoint is None:
+            raise ValueError("--checkpoint is required unless --dry-run is used")
+        config = {
+            "checkpoint": str(args.checkpoint),
+            "output_dir": None if args.output_dir is None else str(args.output_dir),
+            "policy_id": args.policy_id,
+            "real_contract": str(args.real_contract),
+            "copy_checkpoint": bool(args.copy_checkpoint),
+            "image_width": args.image_width,
+            "image_height": args.image_height,
+            "target_runtime": args.target_runtime,
+        }
+        context = _context(args, "export-policy", config)
+        assert context is not None
+        output_dir = args.output_dir or (context.path / "policy_export")
+        report = create_policy_export(
+            checkpoint=args.checkpoint,
+            output_dir=output_dir,
+            policy_id=args.policy_id,
+            real_contract=args.real_contract,
+            copy_checkpoint=args.copy_checkpoint,
+            image_width=args.image_width,
+            image_height=args.image_height,
+            target_runtime=args.target_runtime,
+            notes=args.notes,
+        )
+        return _finish(context, True, report, compact=args.json)
+    except Exception as exc:
+        return _finish(context, False, {"schema": "m20pro_vla_policy_export_result_v1"}, exc, compact=getattr(args, "json", False))
+
+
+def _dispatch_lerobot_stage_environment(args: argparse.Namespace) -> int | None:
+    """Re-run a LeRobot-owned stage inside the configured environment.
+
+    Dataset conversion and SmolVLA training both import LeRobot in process.
+    LeRobot is intentionally installed in its own Conda environment instead of
+    the MuJoCo collection environment, so the whole command must be dispatched
+    before either stage imports its heavy dependencies.
+    """
+    if os.environ.get(SMOLVLA_STAGE_ENV_GUARD) == "1":
+        return None
+    from .runtime.experiment import load_experiment_config
+    from .training.smolvla import conda_env_executable
+
+    settings = load_experiment_config(args.config)["smolvla"]
+    executable = conda_env_executable(settings.get("conda_env", "lerobot"), "python")
+    if not executable.is_file():
+        raise FileNotFoundError(f"SmolVLA environment interpreter not found: {executable}")
+    if Path(sys.executable).resolve() == executable.resolve():
+        return None
+    environment = os.environ.copy()
+    environment[SMOLVLA_STAGE_ENV_GUARD] = "1"
+    environment["PYTHONPATH"] = os.pathsep.join(
+        item
+        for item in (str(workspace_root() / "src"), environment.get("PYTHONPATH", ""))
+        if item
+    )
+    command = [str(executable), "-m", "m20pro_vla.cli", *sys.argv[1:]]
+    print(json.dumps({"lerobot_stage_dispatch": command[0], "reason": "environment owns LeRobot and Hugging Face Hub"}))
+    process = subprocess.run(command, cwd=workspace_root(), env=environment, check=False)
+    return process.returncode
+
+
+def command_experiment(args: argparse.Namespace) -> int:
+    context: RunContext | None = None
+    try:
+        from .runtime.experiment import build_experiment_plan, load_experiment_config, experiment_low_level_environment
+        from .training import evaluate_training_candidate
+
+        plan = build_experiment_plan(args.config)
+        stage = args.stage
+        if args.dry_run or stage == "plan":
+            plan["dry_run"] = bool(args.dry_run)
+            return _finish(None, True, plan, compact=args.json)
+        if stage == "convert" and plan["stages"]["train-smolvla"]["dataset_backend"] == "raw":
+            return _finish(None, True, {"stage": stage, "skipped": True, "dataset_backend": "raw",
+                "reason": "Raw RGB trajectories are read directly; conversion is not part of this training plan."}, compact=args.json)
+        os.environ.update(experiment_low_level_environment(load_experiment_config(args.config)))
+        if stage in {"convert", "train-smolvla"}:
+            dispatch_code = _dispatch_lerobot_stage_environment(args)
+            if dispatch_code is not None:
+                return dispatch_code
+        if stage == "audit":
+            report = plan["training"]["distribution_audit"]
+            context = _context(
+                args,
+                "experiment-audit",
+                {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
+            )
+            return _finish(context, bool(report["passed"]), report, compact=args.json)
+
+        if stage == "curate":
+            from .data import M20MuJoCoDistributionThresholds, curate_episode_view
+
+            config = load_experiment_config(args.config)
+            paths = config["paths"]
+            context = _context(
+                args,
+                "experiment-curate",
+                {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
+            )
+            report = curate_episode_view(
+                source=Path(paths["raw_dataset"]),
+                recovery=Path(paths["recovery_dataset"]),
+                output=Path(paths["dataset"]),
+                thresholds=M20MuJoCoDistributionThresholds(**config["dataset"]),
+            )
+            return _finish(context, True, report, compact=args.json)
+
+        if stage == "convert":
+            from .data.conversion_cache import convert_m20_incremental
+
+            config = load_experiment_config(args.config)
+            settings = config["smolvla"]
+            context = _context(
+                args,
+                "experiment-convert",
+                {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
+            )
+            report = convert_m20_incremental(
+                source=Path(config["paths"]["dataset"]),
+                output=Path(config["paths"]["lerobot_dataset"]),
+                cache_root=Path(settings.get("conversion_cache_dir", ".runtime/cache/lerobot_conversion")),
+                workers=int(settings.get("conversion_workers", 2)),
+                repo_id=str(settings["repo_id"]),
+                source_fps=int(settings["source_fps"]),
+                frame_stride=int(settings["frame_stride"]),
+                terminal_stop_repeat=int(settings.get("terminal_stop_repeat", 1)),
+                recovery_terminal_stop_repeat=int(settings.get("recovery_terminal_stop_repeat", 1)),
+                use_videos=bool(settings.get("use_videos", True)),
+                vcodec=str(settings.get("vcodec", "h264")),
+            )
+            return _finish(context, True, report, compact=args.json)
+
+        context = _context(
+            args,
+            f"experiment-{stage}",
+            {"experiment_config": str(args.config), "experiment_id": plan["experiment_id"], "stage": stage},
+        )
+        assert context is not None
+        if stage == "teleop-record":
+            os.environ.update(load_experiment_config(args.config)["teleoperation"].get("render_environment", {}))
+            from .sim.keyboard_teleop import run_keyboard_recorder
+
+            report = run_keyboard_recorder(load_experiment_config(args.config), context.path)
+            return _finish(context, True, report, compact=args.json)
+        if stage == "train-smolvla":
+            from .training import run_smolvla_training
+
+            stage_plan = plan["stages"][stage]
+            source_review = stage_plan.get('human_source_review')
+            if not (source_review['passed'] if source_review is not None else plan["training"]["distribution_audit"]["passed"]):
+                raise RuntimeError("Source dataset failed distribution/quality audit; collect or filter episodes before SmolVLA training")
+            if not stage_plan["dataset_ready"]:
+                raise FileNotFoundError(f"SmolVLA training dataset is missing: {stage_plan['dataset']}")
+            if stage_plan["output_already_exists"] and not stage_plan.get("resume_checkpoint"):
+                raise FileExistsError(f"SmolVLA output already exists: {stage_plan['output']}")
+            config = load_experiment_config(args.config)
+            with (context.path / "logs" / "stdout.log").open("a", encoding="utf-8") as stdout, (
+                context.path / "logs" / "stderr.log"
+            ).open("a", encoding="utf-8") as stderr:
+                report = run_smolvla_training(config, stdout=stdout, stderr=stderr)
+            report["experiment_id"] = plan["experiment_id"]
+            report["experiment_config"] = str(args.config)
+            return _finish(context, report["exit_code"] == 0, report, compact=args.json)
+        if stage == "gate":
+            gate = plan["stages"]["gate"]
+            report = evaluate_training_candidate(
+                checkpoint=Path(gate["checkpoint"]),
+                eval_summary=Path(gate["eval_summary"]),
+                standard_path=args.config,
+            )
+            return _finish(context, bool(report["eligible_for_shadow"]), report, compact=args.json)
+
+        stage_plan = plan["stages"][stage]
+        if stage == "train":
+            if not stage_plan["eligible"]:
+                return _finish(context, False, plan["training"], compact=args.json)
+            if stage_plan["output_already_exists"]:
+                raise FileExistsError(
+                    f"Checkpoint output already exists: {plan['paths']['checkpoint_dir']}; use a new experiment_id/path"
+                )
+        if stage == "eval" and not stage_plan["checkpoint_exists"]:
+            raise FileNotFoundError(f"Experiment checkpoint does not exist: {stage_plan['args'][1]}")
+        if stage in {"smolvla-eval", "collect-recovery"} and not stage_plan["checkpoint_exists"]:
+            raise FileNotFoundError(f"SmolVLA checkpoint does not exist: {stage_plan['checkpoint']}")
+        conda_env = None
+        hf_offline = False
+        if stage in {"smolvla-eval", "collect-recovery"}:
+            smolvla_settings = load_experiment_config(args.config)["smolvla"]
+            conda_env = str(smolvla_settings.get("conda_env", "lerobot"))
+            hf_offline = bool(smolvla_settings.get("offline", False))
+        report = run_compatibility_script(
+            stage_plan["workflow"],
+            stage_plan["args"],
+            context,
+            conda_env=conda_env,
+            hf_offline=hf_offline,
+        )
+        report["experiment_id"] = plan["experiment_id"]
+        report["experiment_config"] = str(args.config)
         return _finish(context, report["exit_code"] == 0, report, compact=args.json)
     except Exception as exc:
-        return _finish(context, False, {"schema": "m20pro_vla_compat_run_v1", "workflow": args.command}, exc, compact=getattr(args, "json", False))
+        return _finish(
+            context,
+            False,
+            {"schema": "m20pro_vla_experiment_result_v1", "stage": getattr(args, "stage", None)},
+            exc,
+            compact=getattr(args, "json", False),
+        )
 
 
 def command_report(args: argparse.Namespace) -> int:
@@ -260,45 +515,7 @@ def command_report(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    raw_args = list(sys.argv[1:] if argv is None else argv)
-    args, unknown = parser.parse_known_args(raw_args)
-    if unknown:
-        if args.command in COMPATIBILITY_SCRIPTS:
-            # Reconstruct the native argument tail from the original token
-            # order. Argparse may split unknown option values into the
-            # positional remainder in a different order, which is unsafe for
-            # a transparent compatibility adapter.
-            command_index = raw_args.index(args.command)
-            tail = raw_args[command_index + 1 :]
-            forwarded: list[str] = []
-            runtime_value_options = {"--runtime-root", "--run-id"}
-            index = 0
-            while index < len(tail):
-                token = tail[index]
-                if token == "--dry-run":
-                    args.dry_run = True
-                    index += 1
-                    continue
-                if token == "--json":
-                    args.json = True
-                    index += 1
-                    continue
-                if token in runtime_value_options:
-                    if index + 1 >= len(tail):
-                        parser.error(f"{token} requires a value")
-                    setattr(args, token[2:].replace("-", "_"), Path(tail[index + 1]) if token == "--runtime-root" else tail[index + 1])
-                    index += 2
-                    continue
-                if any(token.startswith(option + "=") for option in runtime_value_options):
-                    option, value = token.split("=", 1)
-                    setattr(args, option[2:].replace("-", "_"), Path(value) if option == "--runtime-root" else value)
-                    index += 1
-                    continue
-                forwarded.append(token)
-                index += 1
-            args.extra = forwarded
-        else:
-            parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+    args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
     if args.command == "doctor":
         return command_doctor(args)
     if args.command == "prepare":
@@ -307,8 +524,10 @@ def main(argv: list[str] | None = None) -> int:
         return command_smoke(args)
     if args.command == "low-level-gate":
         return command_low_level_gate(args)
-    if args.command in COMPATIBILITY_SCRIPTS:
-        return command_compatibility(args)
+    if args.command == "export-policy":
+        return command_export_policy(args)
+    if args.command == "experiment":
+        return command_experiment(args)
     if args.command == "report":
         return command_report(args)
     parser.error(f"Unknown command: {args.command}")

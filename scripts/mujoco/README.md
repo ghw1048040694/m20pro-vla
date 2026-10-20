@@ -1,28 +1,22 @@
-# MuJoCo Mainline Commands
+# Generic MuJoCo Executors
 
-These are the compatibility command-line entry points for the WSL
-MuJoCo-first M20 VLA workflow. The user-facing entry point is `m20pro-vla`,
-which records a run context before invoking one of these adapters. They depend
-on the installed `m20pro_vla` package and keep joint-level execution inside
-`M20LowLevelController`.
+These files implement the shared MuJoCo workflows used by `m20pro-vla`:
 
-Typical order:
-
-```bash
-m20pro-vla prepare
-m20pro-vla smoke
-m20pro-vla low-level-gate
-m20pro-vla collect --mode randomized
-m20pro-vla collect --mode search
-m20pro-vla train
-m20pro-vla eval --checkpoint .runtime/checkpoints/m20_mujoco_vla_v1/best.pt --output-dir .runtime/eval/m20_hidden_search_gate_v1
-m20pro-vla audit --dataset .runtime/datasets/m20_mujoco_vla_v1 --strict
+```text
+collect_m20_mujoco_vla.py
+audit_m20_mujoco_vla_distribution.py
+train_m20_mujoco_vla.py
+evaluate_m20_mujoco_hidden_search.py
+play_m20_mujoco_vla.py
+play_m20_smolvla.py
 ```
 
-`collect`, `train`, and `play` write only to `.runtime/` by default. Use a
-versioned output directory for any run that may be compared later.
+Asset preparation uses `prepare_m20_mujoco_asset.py` and
+`build_m20_mujoco_model.py`. Do not copy any of these files for a new
+experiment. Add a versioned JSON config and run `m20pro-vla experiment`.
 
-For hidden-search data, keep the default `--search-start-mode balanced` unless
-you are isolating a specific failure. It emits both `anchor` starts, which
-preserve stable hidden-search success signals, and `varied` starts, which widen
-initial position/yaw coverage for generalization.
+`play_m20_smolvla.py` is the reusable closed-loop SmolVLA executor. It loads
+an official LeRobot checkpoint, replans from both policy cameras and the 32D
+state, and applies the M20 LiDAR safety, motion-smoothing, and visual-stop
+contracts before the low-level wheel controller. Its success result requires
+arrival, latched stop, stable posture, and zero MuJoCo obstacle contacts.

@@ -16,17 +16,17 @@ m20pro-sim/
 │       ├── sim/                  # MuJoCo scene and sensor contracts
 │       ├── policies/             # high-level/body-command policies
 │       ├── data/                 # dataset schemas and conversion helpers
-│       ├── runtime/               # run IDs, snapshots, status, and artifacts
+│       ├── training/             # training plans and promotion gates
+│       ├── deploy/               # real-runtime export contracts
+│       ├── runtime/              # run IDs and one-config orchestration
 │       └── utils/                 # package-level utilities
 ├── configs/                      # versioned experiment and safety contracts
 ├── scripts/
-│   ├── mujoco/                   # compatibility MuJoCo CLIs during migration
-│   └── *.py, *.sh                # ROS/Isaac/legacy commands and compatibility
+│   ├── mujoco/                   # generic collect/train/eval/play executors
+│   └── *.sh                      # environment and ROS simulator operations
 ├── tests/                        # fast contract tests; no runtime artifacts
 ├── docs/                         # architecture, decisions, operational notes
 ├── tools/                        # maintenance and workspace tooling
-├── assets/                       # tracked Isaac Lab asset configuration only
-├── tasks/                        # tracked Isaac Lab task definitions only
 └── .runtime/                     # ignored local cache, data, videos, checkpoints
 ```
 
@@ -43,9 +43,8 @@ m20pro-sim/
 | `tests` | deterministic unit/contract tests | large videos or checkpoints |
 | `.runtime` | datasets, logs, metrics, videos, generated scenes | tracked source code |
 
-`assets/` and `tasks/` are retained because Isaac Lab scripts still import
-their historical namespaces. They are compatibility areas, not the MuJoCo
-mainline. New MuJoCo work belongs in `src/m20pro_vla` and `scripts/mujoco`.
+Every experiment is one versioned JSON file under `configs/`. Experiment
+changes must not create new Python or shell scripts.
 
 ## Control Boundary
 
@@ -83,7 +82,7 @@ large outputs in the repository root, `src/`, `configs/`, or `tests/`.
 1. Put reusable behavior in the owning `src/m20pro_*` package.
 2. Add or update a versioned contract under `configs/`.
 3. Add reusable behavior under `src/m20pro_vla/` and register its lifecycle
-   command in `m20pro_vla.cli`; keep a script only as a compatibility wrapper.
+   command in `m20pro_vla.cli`; experiment variation belongs in JSON config.
 4. Add a fast test under `tests/` and write metrics under `.runtime/`.
 5. Update `README.md`, `docs/ARCHITECTURE.md`, and the project log for a
    user-visible workflow or contract change.

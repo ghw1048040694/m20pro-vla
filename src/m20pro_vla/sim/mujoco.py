@@ -243,11 +243,11 @@ def build_scene(
     # The camera frame is part of the observation contract, not a privileged sensor.
     base.append(ET.Element("camera", {
         "name": "front_rgb", "pos": "0.42 0 0.15",
-        "xyaxes": "0 1 0 -0.174 0 -0.985", "fovy": "65",
+        "xyaxes": "0 -1 0 0.174 0 0.985", "fovy": "65",
     }))
     base.append(ET.Element("camera", {
         "name": "rear_rgb", "pos": "-0.42 0 0.15",
-        "xyaxes": "0 -1 0 0.174 0 -0.985", "fovy": "65",
+        "xyaxes": "0 1 0 -0.174 0 0.985", "fovy": "65",
     }))
     light = light or SceneLightSpec()
     worldbody.insert(0, ET.Element("light", {

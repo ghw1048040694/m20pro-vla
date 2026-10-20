@@ -21,6 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-languages", type=int, default=2)
     parser.add_argument("--min-search-anchor-episodes", type=int, default=1)
     parser.add_argument("--min-search-varied-episodes", type=int, default=1)
+    parser.add_argument(
+        "--min-search-structured-episodes",
+        type=int,
+        default=0,
+        help="Structured (S2/S3) episodes instead of the anchor/varied split; 0 disables the clause.",
+    )
     parser.add_argument("--min-search-successes", type=int, default=1)
     parser.add_argument("--min-target-discovered", type=int, default=1)
     parser.add_argument("--min-search-clearance-m", type=float, default=0.10)
@@ -36,6 +42,7 @@ def main() -> None:
         min_languages=args.min_languages,
         min_search_anchor_episodes=args.min_search_anchor_episodes,
         min_search_varied_episodes=args.min_search_varied_episodes,
+        min_search_structured_episodes=args.min_search_structured_episodes,
         min_search_successes=args.min_search_successes,
         min_target_discovered=args.min_target_discovered,
         min_search_clearance_m=args.min_search_clearance_m,

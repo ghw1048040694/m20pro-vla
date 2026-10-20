@@ -1,0 +1,334 @@
+"""Official LeRobot SmolVLA training backend for the unified experiment."""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any, TextIO
+
+
+def smolvla_dataset_backend(config: dict[str, Any]) -> str:
+    backend = str(config['smolvla'].get('dataset_backend', 'lerobot'))
+    if backend not in {'lerobot', 'raw'}:
+        raise ValueError(f'Unknown SmolVLA dataset backend: {backend}')
+    return backend
+
+
+def smolvla_temporal_spec(config: dict[str, Any]):
+    value = config['smolvla'].get('temporal_rgb')
+    if value is None:
+        return None
+    from ..data.temporal_rgb import TemporalRGBSpec
+    spec = TemporalRGBSpec.from_dict(value)
+    settings = config['smolvla']
+    if (smolvla_dataset_backend(config) != 'raw' or spec.fps != 25
+            or len(spec.offsets) != 3
+            or settings['source_fps'] != spec.fps * settings['frame_stride']):
+        raise ValueError('Temporal training requires raw three-slot 25Hz source ticks')
+    return spec.to_dict()
+
+
+def configure_temporal_training_environment(config, environment):
+    # The reviewed experiment config is authoritative over inherited shell state.
+    spec = smolvla_temporal_spec(config)
+    environment.pop('M20PRO_TEMPORAL_TRAINING_SPEC', None)
+    if spec is not None:
+        environment['M20PRO_TEMPORAL_TRAINING_SPEC'] = json.dumps(spec)
+    return environment
+
+
+def smolvla_dataset_path(config: dict[str, Any]) -> Path:
+    return Path(config['paths']['dataset' if smolvla_dataset_backend(config) == 'raw' else 'lerobot_dataset'])
+
+
+def prepare_smolvla_training_source(config: dict[str, Any]) -> Path:
+    """Create a dataset-adapted local policy source from the cached SmolVLA base."""
+    from huggingface_hub import snapshot_download
+    from lerobot.configs.policies import PreTrainedConfig
+    from lerobot.configs.types import FeatureType
+    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    from lerobot.policies.factory import dataset_to_policy_features
+    from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
+
+    paths = config["paths"]
+    settings = config["smolvla"]
+    dataset_root = smolvla_dataset_path(config)
+    prepared = Path(paths["smolvla_prepared_base"])
+    prepared.mkdir(parents=True, exist_ok=True)
+
+    init_policy = settings.get("init_policy")
+    if init_policy:
+        snapshot = Path(init_policy)
+        if not (snapshot / "config.json").is_file() or not (snapshot / "model.safetensors").is_file():
+            raise FileNotFoundError(f"SmolVLA init policy is incomplete: {snapshot}")
+    else:
+        snapshot = Path(
+            snapshot_download(
+                str(settings["base_model"]),
+                local_files_only=bool(settings.get("offline", False)),
+            )
+        )
+    if smolvla_dataset_backend(config) == 'raw':
+        from .raw_smolvla import make_raw_dataset, raw_training_settings
+        base_dataset = make_raw_dataset(dataset_root, raw_training_settings(config))
+        from ..data.state_input import load_state_input, validate_state_input
+        inherited_state_input = load_state_input(snapshot)
+        state_input = settings.get('state_input', inherited_state_input)
+        if inherited_state_input is not None and state_input != inherited_state_input:
+            raise ValueError('Cannot silently replace a saved state input contract')
+        if state_input is not None:
+            validate_state_input(state_input)
+            temporal = smolvla_temporal_spec(config)
+            if temporal is None:
+                raise ValueError('Relative wheel state requires the temporal raw policy')
+            from ..data.temporal_raw_candidate import TemporalRawDatasetCandidate
+            from ..data.temporal_rgb import TemporalRGBSpec
+            metadata = TemporalRawDatasetCandidate(base_dataset,TemporalRGBSpec.from_dict(temporal),state_input=state_input).meta
+        else:
+            metadata = base_dataset.meta
+    else:
+        metadata = LeRobotDatasetMetadata(str(settings["repo_id"]), root=dataset_root)
+    features = dataset_to_policy_features(metadata.features)
+    policy_config = PreTrainedConfig.from_pretrained(snapshot)
+    policy_config.input_features = {
+        key: feature for key, feature in features.items() if feature.type is not FeatureType.ACTION
+    }
+    policy_config.output_features = {
+        key: feature for key, feature in features.items() if feature.type is FeatureType.ACTION
+    }
+    policy_config.pretrained_path = None
+    policy_config.push_to_hub = False
+    policy_config.save_pretrained(prepared)
+
+    source_weights = (snapshot / "model.safetensors").resolve()
+    target_weights = prepared / "model.safetensors"
+    if target_weights.exists() or target_weights.is_symlink():
+        target_weights.unlink()
+    try:
+        os.link(source_weights, target_weights)
+    except OSError:
+        shutil.copy2(source_weights, target_weights)
+
+    preprocessor, postprocessor = make_smolvla_pre_post_processors(
+        policy_config,
+        dataset_stats=metadata.stats,
+    )
+    preprocessor.save_pretrained(prepared)
+    postprocessor.save_pretrained(prepared)
+    # A temporal checkpoint already has wrapped model keys. Preserve its
+    # architecture sidecar when transferring weights into a new fine-tune.
+    from .temporal_policy_candidate import CONTRACT_FILE as TEMPORAL_FILE
+    if (snapshot / TEMPORAL_FILE).is_file():
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Temporal init policy requires temporal training')
+        shutil.copy2(snapshot / TEMPORAL_FILE, prepared / TEMPORAL_FILE)
+    from ..data.execution_contract import save_execution_contract
+    execution = settings.get('execution_contract')
+    if execution is not None:
+        save_execution_contract(prepared, execution)
+    from .physical_flow_loss import CONTRACT_FILE as OBJECTIVE_FILE, load_objective, validate_objective
+    objective = settings.get('training_objective', load_objective(snapshot))
+    target_objective = prepared/OBJECTIVE_FILE
+    if objective is not None:
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Physical objective requires the temporal M20 policy')
+        target_objective.write_text(json.dumps(validate_objective(objective), indent=2)+'\n')
+    elif target_objective.exists():
+        raise ValueError('Prepared policy has an unexpected training objective')
+    binary = settings.get('binary_stop')
+    saved_binary = snapshot/'m20_binary_stop.json'
+    if binary is not None:
+        from .binary_stop import make_binary_stop_spec_from_saved, validate_binary_stop_spec
+        if binary not in [
+                {'schema': 'm20_binary_stop_v1', 'initialize': True},
+                {'schema': 'm20_visual_language_binary_stop_v2', 'initialize': True}]:
+            raise ValueError('Unknown binary STOP initialization request')
+        if saved_binary.exists():
+            raise ValueError('Cannot reinitialize an already trained binary STOP head')
+        if objective is None or smolvla_temporal_spec(config) is None:
+            raise ValueError('Binary STOP initialization requires physical temporal training')
+        schema = ('m20_observation_binary_stop_v1' if binary['schema'] == 'm20_binary_stop_v1'
+                  else binary['schema'])
+        spec = make_binary_stop_spec_from_saved(prepared, schema=schema)
+        (prepared/'m20_binary_stop_init.json').write_text(json.dumps(validate_binary_stop_spec(spec),indent=2)+'\n')
+    elif saved_binary.exists():
+        from .binary_stop import validate_saved_normalization
+        spec = json.loads(saved_binary.read_text())
+        validate_saved_normalization(prepared, spec)
+        shutil.copy2(saved_binary, prepared/'m20_binary_stop.json')
+    from .physical_flow_loss import validate_objective_context
+    validate_objective_context(prepared, objective, spec if binary is not None or saved_binary.exists() else None)
+    from .visual_connector_adaptation import load_connector_spec, save_connector_spec
+    connector = settings.get('visual_connector_adaptation', load_connector_spec(snapshot))
+    if connector is not None:
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Visual connector adaptation requires the temporal M20 policy')
+        save_connector_spec(prepared, connector)
+    from .optimizer_precision import load_precision_spec, save_precision_spec
+    precision = settings.get('optimizer_precision', load_precision_spec(snapshot))
+    if precision is not None:
+        if smolvla_temporal_spec(config) is None:
+            raise ValueError('Optimizer precision requires the temporal M20 policy')
+        save_precision_spec(prepared, precision)
+    if smolvla_dataset_backend(config) == 'raw' and state_input is not None:
+        from ..data.state_input import save_state_input
+        save_state_input(prepared, state_input)
+    return prepared
+
+
+CONDA_ENVS_ROOT = Path("/home/ubuntu/miniconda3/envs")
+
+
+def conda_env_executable(conda_env: str, name: str) -> Path:
+    """Resolve one binary from a named conda environment.
+
+    The SmolVLA stack (LeRobot + Transformers) lives in its own environment, so
+    every stage that has to import it - training and the learner-only closed
+    loop alike - must call into that environment explicitly instead of assuming
+    the MuJoCo environment can import it.
+    """
+    return CONDA_ENVS_ROOT / str(conda_env) / "bin" / name
+
+
+def smolvla_training_command(
+    config: dict[str, Any],
+    *,
+    policy_path: str | Path | None = None,
+) -> list[str]:
+    paths = config["paths"]
+    settings = config["smolvla"]
+    raw = smolvla_dataset_backend(config) == 'raw'
+    prefix = ([str(conda_env_executable(settings.get('conda_env', 'lerobot'), 'python')),
+               '-m', 'm20pro_vla.training.raw_smolvla'] if raw else
+              [str(conda_env_executable(settings.get('conda_env', 'lerobot'), 'lerobot-train'))])
+    if settings.get("resume_checkpoint"):
+        checkpoint, _ = validate_smolvla_resume(config)
+        # LeRobot restores the policy and optimizer from this saved config.
+        # Passing policy.path here would bypass its resume checkpoint handling.
+        return [*prefix, f"--config_path={checkpoint / 'pretrained_model' / 'train_config.json'}", "--resume=true"]
+    return [
+        *prefix,
+        f"--policy.path={policy_path or settings['base_model']}",
+        f"--dataset.repo_id={settings['repo_id']}",
+        f"--dataset.root={smolvla_dataset_path(config)}",
+        f"--dataset.video_backend={settings.get('video_backend', 'pyav')}",
+        f"--output_dir={paths['smolvla_checkpoint_dir']}",
+        f"--job_name={config['experiment_id']}-smolvla",
+        f"--batch_size={settings['batch_size']}",
+        f"--steps={settings['steps']}",
+        f"--num_workers={settings['num_workers']}",
+        f"--log_freq={settings['log_freq']}",
+        f"--save_freq={settings['save_freq']}",
+        f"--seed={settings['seed']}",
+        "--policy.device=cuda",
+        f"--policy.use_amp={str(bool(settings.get('use_amp', False))).lower()}",
+        f"--policy.use_peft={str(bool(settings.get('use_peft', False))).lower()}",
+        *([f"--policy.optimizer_lr={settings['learning_rate']}"] if 'learning_rate' in settings else []),
+        *([f"--policy.scheduler_warmup_steps={settings['warmup_steps']}",
+           f"--policy.scheduler_decay_steps={settings['steps']}"] if 'warmup_steps' in settings else []),
+        "--policy.push_to_hub=false",
+        "--wandb.enable=false",
+    ]
+
+
+def validate_smolvla_resume(config: dict[str, Any]) -> tuple[Path, int]:
+    """Only resume a complete checkpoint from this unchanged training run."""
+    settings = config["smolvla"]
+    output = Path(config["paths"]["smolvla_checkpoint_dir"]).resolve()
+    checkpoint = Path(settings["resume_checkpoint"]).resolve()
+    if checkpoint.parent != output / "checkpoints":
+        raise ValueError("Resume checkpoint must belong to the configured training output")
+    required = (
+        "pretrained_model/config.json", "pretrained_model/model.safetensors",
+        "pretrained_model/train_config.json", "pretrained_model/policy_preprocessor.json",
+        "pretrained_model/policy_postprocessor.json", "training_state/training_step.json",
+        "training_state/optimizer_param_groups.json", "training_state/optimizer_state.safetensors",
+        "training_state/scheduler_state.json", "training_state/rng_state.safetensors",
+    )
+    for relative in required:
+        path = checkpoint / relative
+        if not path.is_file() or path.stat().st_size == 0:
+            raise FileNotFoundError(f"Incomplete resume checkpoint: {path}")
+    saved = json.loads((checkpoint / "pretrained_model/train_config.json").read_text())
+    for key in ("steps", "batch_size", "seed", "num_workers", "log_freq", "save_freq"):
+        if saved[key] != settings[key]:
+            raise ValueError(f"Resume training configuration differs: {key}")
+    if Path(saved["output_dir"]).resolve() != output:
+        raise ValueError("Resume output differs from saved configuration")
+    if Path(saved["dataset"]["root"]).resolve() != smolvla_dataset_path(config).resolve() or saved["dataset"]["repo_id"] != settings["repo_id"]:
+        raise ValueError("Resume dataset differs from saved configuration")
+    if smolvla_dataset_backend(config) == 'raw':
+        from .raw_smolvla import make_raw_dataset, raw_training_settings, validate_raw_resume_contract
+        validate_raw_resume_contract(output, make_raw_dataset(smolvla_dataset_path(config), raw_training_settings(config)))
+    temporal = smolvla_temporal_spec(config)
+    sidecar = checkpoint / 'pretrained_model/m20_temporal_policy_candidate.json'
+    if sidecar.is_file():
+        stored = json.loads(sidecar.read_text())['core']['temporal_rgb']
+        if temporal != stored:
+            raise ValueError('Resume temporal sampling differs from experiment config')
+    elif temporal is not None:
+        raise ValueError('Temporal resume requires its saved policy contract')
+    step = int(json.loads((checkpoint / "training_state/training_step.json").read_text())["step"])
+    if not 0 < step < int(settings["steps"]):
+        raise ValueError("Resume checkpoint must precede the final training step")
+    return checkpoint, step
+
+
+def run_smolvla_training(
+    config: dict[str, Any],
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> dict[str, Any]:
+    if config["smolvla"].get("offline", False):
+        os.environ.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
+    temporal_spec = smolvla_temporal_spec(config)
+    resume = bool(config["smolvla"].get("resume_checkpoint"))
+    resume_step = validate_smolvla_resume(config)[1] if resume else None
+    policy_path = None if resume else prepare_smolvla_training_source(config)
+    command = smolvla_training_command(config, policy_path=policy_path)
+    executable = Path(command[0])
+    if not executable.is_file():
+        raise FileNotFoundError(f"SmolVLA training executable not found: {executable}")
+    dataset = smolvla_dataset_path(config)
+    raw = smolvla_dataset_backend(config) == 'raw'
+    if not raw and not (dataset / "meta" / "info.json").is_file():
+        raise FileNotFoundError(f"Converted LeRobotDataset is missing: {dataset}")
+    output = Path(config["paths"]["smolvla_checkpoint_dir"])
+    if output.exists() and not resume:
+        raise FileExistsError(f"SmolVLA output already exists: {output}")
+    environment = configure_temporal_training_environment(config, os.environ.copy())
+    if raw:
+        from .raw_smolvla import RAW_SETTINGS_ENV, raw_training_settings
+        environment[RAW_SETTINGS_ENV] = json.dumps(raw_training_settings(config))
+        environment['PYTHONPATH'] = os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[2]), environment.get('PYTHONPATH')]))
+    if config["smolvla"].get("offline", False):
+        environment.update({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
+    result = subprocess.run(command, stdout=stdout, stderr=stderr, env=environment, check=False)
+    report = {
+        "schema": "m20pro_smolvla_training_run_v1",
+        "command": command,
+        "exit_code": result.returncode,
+        "dataset": str(dataset),
+        "output_dir": str(output),
+        "resume_checkpoint": config["smolvla"].get("resume_checkpoint"),
+        "resume_step": resume_step,
+        "dataset_backend": 'raw' if raw else 'lerobot',
+        "temporal_rgb": temporal_spec,
+    }
+    if output.exists():
+        (output / "m20_training_run.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
+__all__ = [
+    "CONDA_ENVS_ROOT",
+    "conda_env_executable",
+    "prepare_smolvla_training_source",
+    "run_smolvla_training",
+    "smolvla_training_command",
+    "validate_smolvla_resume",
+]

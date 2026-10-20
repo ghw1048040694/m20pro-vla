@@ -30,8 +30,62 @@ from m20pro_vla.sim.mujoco import (
     proprioception,
     open_video,
 )
-from m20pro_vla.low_level import M20LowLevelController
-from m20pro_vla.planning import SearchMPCConfig, SearchMPCPlanner, obstacle_clearance_xy
+from m20pro_vla.low_level import M20LowLevelController, build_low_level_controller
+from m20pro_vla.data.visibility import target_pixel_count
+from m20pro_vla.planning.room_search import RoomSearchSchedule
+from m20pro_vla.planning.room_route import RoomSearchRoutePlanner
+from m20pro_vla.planning.teacher_motion import ResponsiveTeacherMotion, MOTION_CONTRACT
+from m20pro_vla.planning import (
+    GlobalPlanner,
+    GlobalPlannerConfig,
+    SearchMPCConfig,
+    SearchMPCPlanner,
+    obstacle_clearance_xy,
+)
+from m20pro_vla.sim.corridor import (
+    ROOM_OBJECT_PERMUTATIONS,
+    all_walls as corridor_all_walls,
+    default_episode as corridor_default_episode,
+    sample_episode as corridor_sample_episode,
+)
+from m20pro_vla.sim.rooms import (
+    default_episode as room_default_episode,
+    room_obstacles,
+    sample_episode as room_sample_episode,
+)
+
+
+def _update_search_stop_tail(previous: int, command: np.ndarray) -> int:
+    """Count actual consecutive stop labels; resumed motion invalidates a hold."""
+    stopped = bool(
+        np.isfinite(command).all()
+        and command[3] >= 0.5
+        and np.all(np.abs(command[:3]) < 1e-6)
+    )
+    return previous + 1 if stopped else 0
+
+
+def _room_search_planner_for_decision(planner, model, goal_xy, obstacles, global_planner, mode, scan_start_radius=None):
+    """Apply phase-specific center arrival even when its coordinates stay fixed."""
+    stop_distance = 0.20 if (mode == 'handoff' or (mode == 'explore' and scan_start_radius is not None)) else 0.65
+    planner_type = RoomSearchRoutePlanner if mode in ('explore', 'handoff') else SearchMPCPlanner
+    if (not np.array_equal(planner.target_xy, goal_xy)
+            or planner.config.stop_distance != stop_distance
+            or type(planner) is not planner_type):
+        return planner_type(model, goal_xy, obstacles,
+            SearchMPCConfig(use_route_planner_when_obstacles=True, stop_distance=stop_distance),
+            global_planner=global_planner)
+    return planner
+
+
+def _room_search_schedule_for_plan(args, plan):
+    if getattr(args, 's3_search_teacher', 'privileged-target') != 'observe-then-route':
+        return None
+    return RoomSearchSchedule(plan.search_room_centers,
+        safe_handoff_bounds=(plan.search_room_bounds
+            if getattr(args, 's3_discovery_handoff', 'direct') == 'interior-center' else ()),
+        scan_start_radius=(.25 if getattr(args, 's3_scan_anchor', 'legacy') == 'interior-center' else None),
+        sweep_radians=(2 * math.pi if getattr(args, 's3_motion_profile', 'legacy') == 'responsive-v1' else math.pi + .2))
 
 
 SEARCH_LAYOUT_TEMPLATES = (
@@ -41,6 +95,13 @@ SEARCH_LAYOUT_TEMPLATES = (
     np.array(((3.50, 0.46), (3.70, -0.38), (3.90, -0.42)), dtype=np.float64),
 )
 SEARCH_SLOT_JITTER_XY = np.array((0.02, 0.015), dtype=np.float64)
+ROBOT_FOOTPRINT_RADIUS_M = 0.375
+# Structured (S2/S3) episodes are 4-5x longer than the S1 open-plane ones: the
+# measured teacher arrival is ~1738-2215 steps for a single room and ~2222 for
+# the three-room corridor, versus ~460 for S1. A budget below this floor
+# truncates episodes before the target is reached, and because "success" is not
+# itself a quality gate that truncation would enter the dataset silently.
+STRUCTURED_SCENE_MIN_STEPS = 2600
 SEARCH_TERRAIN_LAYOUT_SCALE = {
     "flat": 1.00,
     "slope": 0.74,
@@ -110,28 +171,28 @@ SEARCH_OUTER_CLUTTER_TEMPLATES = (
     ObstacleSpec(
         name="search_outer_clutter",
         kind="box",
-        position=(2.48, 1.32, 0.26),
+        position=(2.48, 1.60, 0.26),
         size=(0.08, 0.13, 0.26),
         rgba=(0.42, 0.36, 0.28, 1.0),
     ),
     ObstacleSpec(
         name="search_outer_clutter",
         kind="box",
-        position=(2.82, -1.32, 0.31),
+        position=(2.82, -1.60, 0.31),
         size=(0.09, 0.14, 0.31),
         rgba=(0.24, 0.33, 0.40, 1.0),
     ),
     ObstacleSpec(
         name="search_outer_clutter",
         kind="box",
-        position=(3.18, 1.42, 0.29),
+        position=(3.18, 1.70, 0.29),
         size=(0.07, 0.15, 0.29),
         rgba=(0.36, 0.30, 0.38, 1.0),
     ),
     ObstacleSpec(
         name="search_outer_clutter",
         kind="box",
-        position=(3.36, -1.42, 0.27),
+        position=(3.36, -1.70, 0.27),
         size=(0.08, 0.12, 0.27),
         rgba=(0.31, 0.38, 0.30, 1.0),
     ),
@@ -212,7 +273,53 @@ TASK_TEMPLATES = (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("randomized", "counterfactual", "search"), default="randomized")
+    parser.add_argument(
+        "--scene",
+        choices=("s1", "s2", "s3"),
+        default="s1",
+        help=(
+            "Scene family. s1 keeps the legacy open-plane search layouts bit-for-bit. "
+            "s2 is the single-room curriculum (sim/rooms.py) and s3 the corridor plus three "
+            "rooms (sim/corridor.py); both require --mode search and drive the teacher with the "
+            "privileged global planner so it can thread the doorways."
+        ),
+    )
+    parser.add_argument(
+        "--scene-episode",
+        choices=("default", "sampled"),
+        default="sampled",
+        help=(
+            "Structured scenes (s2/s3) only. 'default' collects the single hand-checked episode "
+            "(one layout); 'sampled' rejection-samples a jittered building per layout."
+        ),
+    )
+    parser.add_argument(
+        "--s3-room-assignment", choices=("canonical", "balanced-permutations"), default="canonical",
+        help="Sampled S3 only: cycle all six object-to-room assignments by absolute layout ID.",
+    )
+    parser.add_argument(
+        "--s3-search-teacher", choices=("privileged-target", "observe-then-route"), default="privileged-target",
+        help="S3 expert only: explore rooms until onboard RGB finds the task target, then route to it.",
+    )
+    parser.add_argument(
+        "--s3-discovery-handoff", choices=("direct", "interior-center"), default="direct",
+        help="Observation teacher only: complete room entry before turning toward a discovered target.",
+    )
+    parser.add_argument(
+        "--s3-scan-anchor", choices=("legacy", "interior-center"), default="legacy",
+        help="Observation teacher only: enter the room center within .25 m before starting a scan.",
+    )
+    parser.add_argument('--s3-motion-profile', choices=('legacy', 'responsive-v1'), default='legacy',
+                        help='Teacher-only explicit .50 m/s/.40 rad/s sequential motion and lidar retreat. New physical action contract; quarantine before learner normalization adaptation.')
     parser.add_argument("--episodes", type=int, default=24)
+    parser.add_argument(
+        "--structured-start-mode", choices=("hidden", "visible-approach"), default="hidden",
+        help="S2 only: visible-approach starts safely inside the room facing the target; hidden keeps the doorway search curriculum.",
+    )
+    parser.add_argument("--visible-approach-min-distance", type=float, default=1.6,
+                        help="Minimum initial goal distance for the S2 visible-approach teacher.")
+    parser.add_argument("--visible-approach-max-distance", type=float, default=3.0,
+                        help="Maximum initial goal distance; infeasible poses are refused, never clamped.")
     parser.add_argument("--layouts", type=int, default=12, help="Counterfactual layouts; each yields one episode per instruction.")
     parser.add_argument("--layout-offset", type=int, default=0, help="First counterfactual layout ID; used only for disjoint collection shards.")
     parser.add_argument("--steps", type=int, default=240)
@@ -248,10 +355,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--search-curriculum-success-radius",
         type=float,
-        default=0.45,
+        default=0.95,
         help=(
             "Search-only radius that triggers expert stop labels and early-stop hold. "
-            "Use a safe standoff radius so the expert stops before the robot collides with the target."
+            "Use a safe standoff radius so the expert stops before the robot collides with the target. "
+            "Raised from 0.70 to 0.95 on 2026-10-04: at 0.70 the policy camera showed zero target "
+            "pixels in 20/29 teacher arrivals, so the stop label was not decodable from the image. "
+            "At 0.95 the trigger frame carries a median of 812 target pixels (p10 414, none below the "
+            "80-pixel gate) - see diag/stop_rule_feasibility.py."
         ),
     )
     parser.add_argument(
@@ -292,6 +403,28 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--policy-width", type=int, default=IMAGE_WIDTH)
     parser.add_argument("--policy-height", type=int, default=IMAGE_HEIGHT)
+    parser.add_argument("--quality-min-base-height-m", type=float, default=0.45)
+    parser.add_argument("--quality-max-abs-roll-deg", type=float, default=8.0)
+    parser.add_argument("--quality-max-abs-pitch-deg", type=float, default=8.0)
+    parser.add_argument("--quality-max-vertical-velocity-rms-mps", type=float, default=0.12)
+    parser.add_argument("--quality-max-roll-rate-rms-radps", type=float, default=0.20)
+    parser.add_argument("--quality-max-pitch-rate-rms-radps", type=float, default=0.25)
+    parser.add_argument("--quality-min-target-clearance-m", type=float, default=0.0)
+    parser.add_argument(
+        "--quality-max-obstacle-contact-steps",
+        type=int,
+        default=0,
+        help=(
+            "Maximum number of steps the robot may touch a wall and still be accepted. The default 0 "
+            "keeps the historical open-plane contract, where the robot never needs to pass close to "
+            "anything. Structured scenes need a small budget: a measured 1.2 m doorway crossing "
+            "grazes the door jamb for ~5 steps, because the low-level controller tracks the planned "
+            "route to ~0.13 m while a 1.2 m doorway only leaves 0.225 m of half-clearance. The exact "
+            "count is still recorded per episode as obstacle_contact_step_count, so a stricter "
+            "re-curation never needs a re-collection."
+        ),
+    )
+    parser.add_argument("--quality-min-search-displacement-m", type=float, default=0.5)
     parser.add_argument("--output-dir", type=Path, default=Path(os.environ.get("M20PRO_VLA_DATA_ROOT", ".runtime")) / "datasets/m20_mujoco_vla_v1")
     parser.add_argument("--video-dir", type=Path, default=Path(os.environ.get("M20PRO_VLA_DATA_ROOT", ".runtime")) / "videos/m20_mujoco_vla_v1")
     parser.add_argument(
@@ -301,11 +434,31 @@ def parse_args() -> argparse.Namespace:
         help="Write an H.264 episode video. Disable for faster distribution smoke tests.",
     )
     parser.add_argument(
+        "--video-view",
+        choices=("policy_front", "third_person"),
+        default="policy_front",
+        help="Render the policy front camera or a human-facing third-person review video.",
+    )
+    parser.add_argument("--video-width", type=int, default=640)
+    parser.add_argument("--video-height", type=int, default=360)
+    parser.add_argument("--demo-camera-smoothing", type=float, default=0.08)
+    parser.add_argument(
         "--metadata-only",
         action="store_true",
         help="Skip RGB/LiDAR/proprio/action arrays and write metadata only.",
     )
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help=(
+            "Declare episodes without running any simulation: write the same episode JSON "
+            "schema but skip the scene build, the teacher rollout, the quality gate and the "
+            "arrays. Used to materialise a held-out evaluation set (e.g. the S3 corridor) "
+            "that is never collected and never trained on."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -331,6 +484,14 @@ class EpisodePlan:
     search_start_yaw_offset: float = 0.0
     search_required: bool = False
     initial_target_visible: bool = True
+    # Structured scene provenance. ``"s1"`` keeps the legacy open-plane path
+    # untouched; ``"s2"``/``"s3"`` mark episodes whose only legal route runs
+    # through doorways and which therefore drive the teacher's global planner.
+    scene_kind: str = "s1"
+    scene_name: str = ""
+    room_object_assignment: tuple[tuple[str, str], ...] = ()
+    search_room_centers: tuple[tuple[float, float], ...] = ()
+    search_room_bounds: tuple[tuple[float, float, float, float], ...] = ()
 
 
 def _wrap_angle(angle: float) -> float:
@@ -356,6 +517,22 @@ def _minimum_obstacle_clearance(
     if not obstacles:
         return None
     return min(obstacle_clearance_xy(point_xy, obstacle) for obstacle in obstacles)
+
+
+def _contacting_obstacles(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obstacle_geom_ids: set[int],
+) -> set[str]:
+    names: set[str] = set()
+    for index in range(int(data.ncon)):
+        contact = data.contact[index]
+        for geom_id in (int(contact.geom1), int(contact.geom2)):
+            if geom_id in obstacle_geom_ids:
+                names.add(
+                    mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or str(geom_id)
+                )
+    return names
 
 
 def _appearance_rng(*parts: object) -> np.random.Generator:
@@ -495,6 +672,103 @@ def _task_language_for(
         "task_language": language,
         "task_object_text_en": object_text["en"],
         "task_object_text_zh": object_text["zh"],
+    }
+
+
+def _s3_assignment_provenance(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
+    if plan.scene_kind != "s3":
+        return {}
+    return {
+        "s3_room_assignment_mode": getattr(args, "s3_room_assignment", "canonical"),
+        "s3_search_teacher_mode": getattr(args, "s3_search_teacher", "privileged-target"),
+        "s3_discovery_handoff_mode": getattr(args, "s3_discovery_handoff", "direct"),
+        "s3_scan_anchor_mode": getattr(args, "s3_scan_anchor", "legacy"),
+        "room_object_assignment_privileged_metadata_only": dict(plan.room_object_assignment),
+    }
+
+
+def _plan_only_metadata(args: argparse.Namespace, plan: "EpisodePlan") -> dict:
+    """Episode JSON for a declared-but-not-collected evaluation layout.
+
+    The closed-loop player rebuilds the scene, the start pose, the target and the
+    budget from this file alone, so a held-out layout needs only its plan - no
+    teacher rollout, no frames, no quality gate. Keys mirror the collected schema
+    exactly; only the fields a rollout alone can produce are omitted. ``steps``
+    carries the requested budget, which the player still honours per episode
+    unless ``--match-teacher-budget`` overrides it.
+    """
+    task_language = _task_language_for(
+        target_label=plan.target_label,
+        episode_id=plan.episode_id,
+        seed=args.seed,
+        language_mode=args.language_mode,
+    )
+    success_radius = float(args.search_curriculum_success_radius) if args.mode == "search" else 0.70
+    return {
+        "schema": "m20pro_mujoco_vla_episode_v1",
+        "episode_id": plan.episode_id,
+        "collection_mode": args.mode,
+        "layout_id": plan.layout_id,
+        "terrain_profile": plan.terrain_profile,
+        "terrain_version": "",
+        "scene_kind": plan.scene_kind,
+        "scene_name": plan.scene_name,
+        "scene_episode": args.scene_episode if plan.scene_kind in {"s2", "s3"} else "",
+        "initial_yaw": plan.yaw,
+        "initial_xy": [float(plan.start_xy[0]), float(plan.start_xy[1])],
+        "scene_light": (
+            {
+                "pos": list(plan.scene_light.pos),
+                "direction": list(plan.scene_light.direction),
+                "diffuse": list(plan.scene_light.diffuse),
+                "ambient": list(plan.scene_light.ambient),
+                "specular": list(plan.scene_light.specular),
+                "directional": bool(plan.scene_light.directional),
+            }
+            if plan.scene_light is not None
+            else {}
+        ),
+        "search_start_xy_template_id": plan.search_start_xy_template_id,
+        "search_start_mode": plan.search_start_mode if args.mode == "search" else "",
+        "search_start_variant": plan.search_start_variant if args.mode == "search" else "",
+        "search_start_yaw_offset_rad": float(plan.search_start_yaw_offset),
+        "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
+        "metadata_only": True,
+        **_visible_approach_provenance(args, plan),
+        **_s3_assignment_provenance(args, plan),
+        "plan_only": True,
+        **task_language,
+        "target_label": plan.target_label,
+        "target_xy_privileged_label_only": plan.target_xy.tolist(),
+        "objects": [
+            {
+                "name": obj.name,
+                "label": obj.label,
+                "position": list(obj.position),
+                "rgba": list(obj.rgba),
+                "size": list(obj.size),
+            }
+            for obj in plan.objects
+        ],
+        "obstacles": [
+            {
+                "name": obstacle.name,
+                "kind": obstacle.kind,
+                "position": list(obstacle.position),
+                "size": list(obstacle.size),
+                "rgba": list(obstacle.rgba),
+            }
+            for obstacle in plan.obstacles
+        ],
+        "steps": int(args.steps),
+        "requested_steps": int(args.steps),
+        "warmup_steps": args.warmup_steps,
+        "task_object_collisions": args.mode == "randomized",
+        "search_required": plan.search_required,
+        "initial_target_visible": plan.initial_target_visible,
+        "success_radius": success_radius,
+        "curriculum_success_radius": success_radius,
+        "search_obstacle_count": len(plan.obstacles),
     }
 
 
@@ -764,16 +1038,239 @@ def _expert_command(
     return np.array((speed, 0.0, yaw_action, 0.0), dtype=np.float64)
 
 
+def _structured_scene_walls(episode, scene: str) -> list[ObstacleSpec]:
+    """Walls of a structured episode, in the same box convention as the teacher.
+
+    ``strict=False`` keeps a malformed wing from raising here; the samplers
+    already reject anything that fails :func:`validate_multiroom`, so this only
+    guards the hand-written default episode.
+    """
+    if scene == "s2":
+        return room_obstacles(episode.spec)
+    return corridor_all_walls(episode.spec, strict=False)
+
+
+def _visible_approach_provenance(args, plan):
+    return {
+        "initial_target_distance_m": float(np.linalg.norm(plan.target_xy - plan.start_xy)),
+        "visible_approach_distance_range_m": (
+            [float(getattr(args, "visible_approach_min_distance", 1.6)),
+             float(getattr(args, "visible_approach_max_distance", 3.0))]
+            if plan.search_start_variant == "visible-approach" else None
+        ),
+    }
+
+
+class VisibleApproachPoseUnavailable(ValueError):
+    """A valid requested distance range has no safe pose in this scene."""
+
+
+def _visible_approach_pose(episode, target, walls, rng, *, min_distance=1.6, max_distance=3.0):
+    """Sample a collision-free, unobstructed approach with useful travel remaining."""
+    if not (math.isfinite(min_distance) and math.isfinite(max_distance)
+            and 0.0 < min_distance <= max_distance):
+        raise ValueError("Visible approach distances must be finite, positive and ordered")
+    x0, x1 = episode.spec.interior_x
+    y0, y1 = episode.spec.interior_y
+    margin = ROBOT_FOOTPRINT_RADIUS_M + 0.15
+    goal = np.asarray(target.position, dtype=np.float64)
+    for _ in range(512):
+        start = np.array((rng.uniform(x0 + margin, x1 - margin),
+                          rng.uniform(y0 + margin, y1 - margin)))
+        distance = float(np.linalg.norm(goal - start))
+        if not min_distance <= distance <= max_distance:
+            continue
+        if not _target_visible_from(start, goal, walls):
+            continue
+        if any(float(np.linalg.norm(start - np.asarray(obj.position))) < 0.65
+               for obj in episode.objects):
+            continue
+        yaw_offset = float(rng.uniform(-0.55, 0.55))
+        yaw = math.atan2(float(goal[1] - start[1]), float(goal[0] - start[0])) + yaw_offset
+        return start, _wrap_angle(yaw), yaw_offset
+    raise VisibleApproachPoseUnavailable("No safe visible-approach start found; refusing this curriculum layout")
+
+
+def _structured_plans(args: argparse.Namespace, rng: np.random.Generator) -> list[EpisodePlan]:
+    """Build S2/S3 episode plans from the room/corridor scene modules.
+
+    Unlike the open-plane search layouts, the target here is a specific object
+    inside a specific room and the start pose is outside the building, so every
+    episode is *only* solvable through one or more doorways. Each plan carries
+    ``scene_kind`` so the main loop knows to hand the teacher a global planner.
+
+    One plan is emitted per object, matching the S1 search convention: the same
+    building is reused for three language instructions with three different
+    targets. Episode ids are ``layout_id * len(OBJECTS) + target_index`` so the
+    shard-friendly ``dataset_summary.json`` aggregation keeps working.
+    """
+    sampler = room_sample_episode if args.scene == "s2" else corridor_sample_episode
+    default_episode = room_default_episode if args.scene == "s2" else corridor_default_episode
+    layout_ids = range(args.layout_offset, args.layout_offset + args.layouts)
+    if args.scene_episode == "default":
+        # The hand-checked episode is a single fixed building; repeating it per
+        # layout would only duplicate geometry under fresh episode ids.
+        layout_ids = range(args.layout_offset, args.layout_offset + 1)
+    plans: list[EpisodePlan] = []
+    args.visible_approach_pose_refusals = []
+    for layout_id in layout_ids:
+        layout_seed = args.seed + 1009 * layout_id
+        if args.scene_episode == "default":
+            episode = default_episode()
+        else:
+            sampler_options = {}
+            if args.scene == "s3" and getattr(args, "s3_room_assignment", "canonical") == "balanced-permutations":
+                sampler_options["room_object_order"] = ROOM_OBJECT_PERMUTATIONS[layout_id % len(ROOM_OBJECT_PERMUTATIONS)]
+            episode = sampler(rng, attempts=64, **sampler_options)
+            if episode is None:
+                print(
+                    json.dumps(
+                        {"structured_scene_refused": {"scene": args.scene, "layout_id": layout_id}},
+                        ensure_ascii=False,
+                    ),
+                    flush=True,
+                )
+                continue
+        appearance_rng = _appearance_rng(layout_seed, "structured", args.scene, layout_id)
+        scene_light = _sample_scene_light(appearance_rng)
+        walls = _structured_scene_walls(episode, args.scene)
+        start_xy = np.asarray(episode.start_xy, dtype=np.float64)
+        for target_index, (_, target_label, _, _) in enumerate(OBJECTS):
+            target_object = next((obj for obj in episode.objects if obj.label == target_label), None)
+            if target_object is None:
+                continue
+            target_xy = np.asarray(target_object.position, dtype=np.float64)
+            visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
+            yaw, yaw_offset = float(episode.start_yaw), 0.0
+            episode_start = start_xy
+            if visible_approach:
+                pose_rng = _appearance_rng(layout_seed, "visible-approach", target_label)
+                try:
+                    episode_start, yaw, yaw_offset = _visible_approach_pose(
+                        episode, target_object, walls, pose_rng,
+                        min_distance=float(getattr(args, "visible_approach_min_distance", 1.6)),
+                        max_distance=float(getattr(args, "visible_approach_max_distance", 3.0)),
+                    )
+                except VisibleApproachPoseUnavailable as exc:
+                    refusal = {"layout_id": layout_id, "target_label": target_label,
+                               "reason": str(exc),
+                               "distance_range_m": [float(getattr(args, "visible_approach_min_distance", 1.6)),
+                                                    float(getattr(args, "visible_approach_max_distance", 3.0))]}
+                    args.visible_approach_pose_refusals.append(refusal)
+                    print(json.dumps({"visible_approach_pose_refused": refusal}), flush=True)
+                    continue
+            plans.append(
+                EpisodePlan(
+                    episode_id=layout_id * len(OBJECTS) + target_index,
+                    layout_id=layout_id,
+                    terrain_profile="flat",
+                    search_template_id=None,
+                    search_obstacle_template_id=None,
+                    search_secondary_obstacle_template_id=None,
+                    search_outer_obstacle_template_id=None,
+                    yaw=yaw,
+                    start_xy=episode_start,
+                    target_xy=target_xy,
+                    target_label=target_label,
+                    objects=list(episode.objects),
+                    obstacles=list(walls),
+                    scene_light=scene_light,
+                    search_start_mode="structured",
+                    search_start_variant="visible-approach" if visible_approach else "structured",
+                    search_start_xy_template_id=-1,
+                    search_start_yaw_offset=yaw_offset,
+                    search_required=not visible_approach,
+                    initial_target_visible=_target_visible_from(episode_start, target_xy, walls),
+                    scene_kind=args.scene,
+                    scene_name=str(episode.spec.name),
+                    room_object_assignment=(tuple((wing.name, wing.object_name) for wing in episode.spec.rooms)
+                                            if args.scene == "s3" else ()),
+                    search_room_centers=(tuple(wing.interior_center for wing in episode.spec.rooms)
+                                         if args.scene == "s3" else ()),
+                    search_room_bounds=(tuple((*wing.interior_x, *wing.interior_y) for wing in episode.spec.rooms)
+                                        if args.scene == "s3" else ()),
+                )
+            )
+    return plans
+
+
+def _validate_structured_scene_args(args: argparse.Namespace) -> bool:
+    """Validate the S2/S3 request and report whether it is a structured scene.
+
+    Both rejected combinations fail *silently* otherwise: the open-plane teacher
+    simply never leaves the start pose (its three-point detour cannot thread a
+    doorway), and a short budget truncates the episode before the target is
+    reached while still passing every quality gate. Failing loudly here is what
+    keeps a poisoned episode out of the dataset.
+    """
+    structured = args.scene in {"s2", "s3"}
+    assignment = getattr(args, "s3_room_assignment", "canonical")
+    if assignment != "canonical" and (args.scene != "s3" or args.scene_episode != "sampled"):
+        raise ValueError("--s3-room-assignment balanced-permutations requires sampled --scene s3")
+    if getattr(args, "s3_search_teacher", "privileged-target") == "observe-then-route":
+        if args.scene != "s3" or getattr(args, "metadata_only", False):
+            raise ValueError("--s3-search-teacher observe-then-route requires --scene s3 and real RGB arrays")
+    if getattr(args, "s3_discovery_handoff", "direct") != "direct" and (
+        args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
+    ):
+        raise ValueError("Interior-center handoff requires the S3 observation teacher")
+    if getattr(args, "s3_scan_anchor", "legacy") != "legacy" and (
+        args.scene != "s3" or getattr(args, "s3_search_teacher", "privileged-target") != "observe-then-route"
+    ):
+        raise ValueError("Interior scan anchor requires the S3 observation teacher")
+    if getattr(args, 's3_motion_profile', 'legacy') != 'legacy' and (
+            args.scene != 's3' or getattr(args, 's3_search_teacher', '') != 'observe-then-route'
+            or getattr(args, 'metadata_only', False)):
+        raise ValueError('Responsive motion requires real RGB S3 observation teacher')
+    visible_approach = getattr(args, "structured_start_mode", "hidden") == "visible-approach"
+    if visible_approach and args.scene != "s2":
+        raise ValueError("--structured-start-mode visible-approach requires --scene s2")
+    if structured and args.mode != "search":
+        raise ValueError(
+            f"--scene {args.scene} requires --mode search: structured episodes are solved by the "
+            "privileged teacher, not by the open-plane approach command."
+        )
+    min_steps = 600 if visible_approach else STRUCTURED_SCENE_MIN_STEPS
+    if structured and args.steps < min_steps:
+        raise ValueError(
+            f"--scene {args.scene} needs --steps >= {min_steps}; the measured teacher "
+            "arrival is ~1740-2220 steps and a tighter budget would silently truncate episodes before "
+            "the target is reached."
+        )
+    return structured
+
+
 def main() -> None:
     args = parse_args()
     if args.episodes <= 0 or args.layouts <= 0 or args.layout_offset < 0 or args.steps <= args.warmup_steps or args.warmup_steps < 1:
         raise ValueError("invalid episode length")
     if args.policy_width <= 0 or args.policy_height <= 0:
         raise ValueError("policy RGB resolution must be positive")
+    if args.video_width <= 0 or args.video_height <= 0:
+        raise ValueError("video resolution must be positive")
+    if not 0.0 < args.demo_camera_smoothing <= 1.0:
+        raise ValueError("demo camera smoothing must be in (0, 1]")
+    if args.quality_min_base_height_m <= 0.0:
+        raise ValueError("quality minimum base height must be positive")
+    if args.quality_max_abs_roll_deg <= 0.0 or args.quality_max_abs_pitch_deg <= 0.0:
+        raise ValueError("quality attitude limits must be positive")
+    if min(
+        args.quality_max_vertical_velocity_rms_mps,
+        args.quality_max_roll_rate_rms_radps,
+        args.quality_max_pitch_rate_rms_radps,
+    ) <= 0.0:
+        raise ValueError("quality body-rate RMS limits must be positive")
+    if args.quality_min_target_clearance_m < 0.0:
+        raise ValueError("quality target clearance must be non-negative")
+    if args.quality_max_obstacle_contact_steps < 0:
+        raise ValueError("quality obstacle contact budget must be non-negative")
+    if args.quality_min_search_displacement_m < 0.0:
+        raise ValueError("quality minimum search displacement must be non-negative")
     if args.search_terrain_profile != "cycle" and args.mode != "search":
         raise ValueError("--search-terrain-profile is only valid with --mode search")
     if args.search_success_hold_steps < 0:
         raise ValueError("search-success-hold-steps must be non-negative")
+    structured_scene = _validate_structured_scene_args(args)
     if not ASSET.is_file():
         raise FileNotFoundError(f"Build the asset first: {ASSET}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -782,7 +1279,10 @@ def main() -> None:
     # worker silently regenerates the same layouts from the same seed.
     rng = np.random.default_rng(args.seed + 1009 * args.layout_offset)
     summaries = []
-    if args.mode == "counterfactual":
+    rejected_summaries = []
+    if structured_scene:
+        plans = _structured_plans(args, rng)
+    elif args.mode == "counterfactual":
         plans = []
         for layout_id in range(args.layout_offset, args.layout_offset + args.layouts):
             layout_seed = args.seed + 1009 * layout_id
@@ -913,11 +1413,42 @@ def main() -> None:
             )
     for plan in plans:
         out = args.output_dir / f"episode_{plan.episode_id:04d}.npz"
+        episode_metadata_path = args.output_dir / f"episode_{plan.episode_id:04d}.json"
+        rejected_metadata_path = args.output_dir / f"rejected_episode_{plan.episode_id:04d}.json"
         video_path = args.video_dir / f"episode_{plan.episode_id:04d}.mp4"
+        if args.skip_existing and out.is_file() and episode_metadata_path.is_file():
+            continue
         if out.exists() and not args.overwrite:
             raise FileExistsError(f"Episode exists; pass --overwrite: {out}")
+        if args.plan_only:
+            # Declared, never collected: the JSON alone lets the closed-loop
+            # player rebuild the scene, the start pose and the budget, so a
+            # held-out layout costs no teacher rollout and no frames.
+            episode_metadata_path.write_text(
+                json.dumps(_plan_only_metadata(args, plan), indent=2) + "\n",
+                encoding="utf-8",
+            )
+            print(
+                json.dumps(
+                    {
+                        "plan_only": {
+                            "episode_id": plan.episode_id,
+                            "scene_kind": plan.scene_kind,
+                            "scene_name": plan.scene_name,
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            continue
         scene_path = args.output_dir / f"scene_{plan.episode_id:04d}.xml"
         task_object_collisions = args.mode == "randomized"
+        target_object = next(item for item in plan.objects if item.label == plan.target_label)
+        if target_object.kind == "box":
+            target_radius = float(np.hypot(target_object.size[0], target_object.size[1]))
+        else:
+            target_radius = float(target_object.size[0])
         canonical_success_radius = 0.22 if args.mode in {"counterfactual", "search"} else 0.70
         curriculum_success_radius = (
             float(args.search_curriculum_success_radius) if args.mode == "search" else canonical_success_radius
@@ -934,12 +1465,27 @@ def main() -> None:
         )
         model = mujoco.MjModel.from_xml_path(str(scene_path))
         data = mujoco.MjData(model)
-        controller = M20LowLevelController(model)
+        obstacle_geom_ids = {
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, f"{obstacle.name}_geom")
+            for obstacle in plan.obstacles
+        }
+        obstacle_geom_ids.discard(-1)
+        responsive = args.s3_motion_profile == 'responsive-v1'
+        controller = build_low_level_controller(model, **({'teacher_motion_limits': (.50, .40)} if responsive else {}))
+        motion_teacher = ResponsiveTeacherMotion() if responsive else None
+        motion_trace = []
         controller.reset(data, plan.yaw, plan.start_xy)
+        structured = plan.scene_kind in {"s2", "s3"}
         effective_search_policy = ""
         use_route_planner = True
         if args.mode == "search":
-            if args.search_policy == "waypoint":
+            if structured:
+                # A structured episode is only solvable through its doorways,
+                # which the legacy three-point detour cannot express. The route
+                # planner (now backed by the global A*) is therefore mandatory
+                # and the --search-policy knob does not apply.
+                use_route_planner = True
+            elif args.search_policy == "waypoint":
                 use_route_planner = True
             elif args.search_policy == "active_mpc":
                 use_route_planner = False
@@ -952,33 +1498,64 @@ def main() -> None:
                     )
                 )
             effective_search_policy = "waypoint" if use_route_planner else "active_mpc"
+        global_planner = (
+            GlobalPlanner(plan.obstacles, GlobalPlannerConfig()) if structured else None
+        )
         search_planner = (
             SearchMPCPlanner(
                 model,
                 plan.target_xy,
                 plan.obstacles,
                 SearchMPCConfig(use_route_planner_when_obstacles=use_route_planner),
+                global_planner=global_planner,
             )
             if args.mode == "search"
             else None
         )
+        room_search = _room_search_schedule_for_plan(args, plan)
+        rgb_discovery_step = -1
+        explored_room_scans = 0
+        teacher_trace = []  # Diagnostic sidecar only; never part of policy observations.
         renderer = mujoco.Renderer(model, height=args.policy_height, width=args.policy_width) if collect_arrays else None
+        demo_renderer = (
+            mujoco.Renderer(model, height=args.video_height, width=args.video_width)
+            if args.video and collect_arrays and args.video_view == "third_person"
+            else None
+        )
+        third_camera = mujoco.MjvCamera()
+        third_camera.type = mujoco.mjtCamera.mjCAMERA_FREE
+        third_camera.distance = 5.4 if structured else 3.1
+        third_camera.azimuth = 138.0
+        third_camera.elevation = -34.0 if structured else -24.0
+        smoothed_demo_lookat = np.asarray(data.qpos[:3], dtype=np.float64).copy()
+        smoothed_demo_lookat[2] = 0.50
         front = np.zeros((args.steps, args.policy_height, args.policy_width, 3), dtype=np.uint8) if collect_arrays else None
         rear = np.zeros_like(front) if collect_arrays else None
         lidar = np.zeros((args.steps, 72), dtype=np.float32) if collect_arrays else None
         proprio = np.zeros((args.steps, 45), dtype=np.float32) if collect_arrays else None
         action = np.zeros((args.steps, 4), dtype=np.float32) if collect_arrays else None
-        video = open_video(video_path, args.policy_width, args.policy_height) if (args.video and collect_arrays) else None
+        video_width = args.video_width if args.video_view == "third_person" else args.policy_width
+        video_height = args.video_height if args.video_view == "third_person" else args.policy_height
+        video = open_video(video_path, video_width, video_height) if (args.video and collect_arrays) else None
         reached_step = -1
         canonical_reached_step = -1
         min_distance = float("inf")
         min_height = float(data.qpos[2])
+        max_abs_roll_deg = 0.0
+        max_abs_pitch_deg = 0.0
+        vertical_velocities: list[float] = []
+        roll_rates: list[float] = []
+        pitch_rates: list[float] = []
+        obstacle_contact_steps = 0
+        obstacle_contact_names: set[str] = set()
         success = False
         planner_info: dict[str, float | list[float]] = {}
         target_first_visible_step = -1
         target_visible_steps = 0
         min_obstacle_clearance = None
         collected_steps = 0
+        terminal_stop_steps = 0
+        initial_target_pixels = None
         terminated_early = False
         try:
             for step in range(args.steps + args.warmup_steps):
@@ -1000,14 +1577,42 @@ def main() -> None:
                     delta = plan.target_xy - base_xy
                     distance = float(np.linalg.norm(delta))
                     bearing = _wrap_angle(math.atan2(float(delta[1]), float(delta[0])) - base_yaw)
-                    if distance <= curriculum_success_radius and reached_step < 0:
+                    search_decision = None
+                    observed_front = observed_rear = None
+                    if room_search is not None:
+                        assert renderer is not None
+                        renderer.update_scene(data, camera="front_rgb")
+                        observed_front = renderer.render().copy()
+                        renderer.update_scene(data, camera="rear_rgb")
+                        observed_rear = renderer.render().copy()
+                        observed_pixels = (target_pixel_count(observed_front, plan.target_label)
+                                           + target_pixel_count(observed_rear, plan.target_label))
+                        search_decision = room_search.advance(base_xy, base_yaw, observed_pixels)
+                        if room_search.discovered and rgb_discovery_step < 0:
+                            rgb_discovery_step = step - args.warmup_steps
+                        explored_room_scans = room_search.completed_room_scans
+                        if search_decision['mode'] != 'scan':
+                            planning_goal = (plan.target_xy if search_decision['mode'] == 'target'
+                                             else np.asarray(search_decision['goal_xy'], dtype=np.float64))
+                            search_planner = _room_search_planner_for_decision(
+                                search_planner, model, planning_goal, plan.obstacles,
+                                global_planner, search_decision['mode'],
+                                scan_start_radius=room_search.scan_start_radius)
+                    goal_observed = room_search is None or room_search.discovered
+                    if goal_observed and distance <= curriculum_success_radius and reached_step < 0:
                         reached_step = max(0, step - args.warmup_steps)
                     if distance <= canonical_success_radius and canonical_reached_step < 0:
                         canonical_reached_step = max(0, step - args.warmup_steps)
-                    if distance <= curriculum_success_radius:
+                    if goal_observed and distance <= curriculum_success_radius:
                         expert = np.array((0.0, 0.0, 0.0, 1.0), dtype=np.float64)
+                    elif search_decision is not None and search_decision['mode'] == 'scan':
+                        expert = np.array((0.0, 0.0, 0.15, 0.0), dtype=np.float64)
+                        planner_info = {'room_search_mode': 'scan', 'room_search_index': room_search.room_index}
                     elif args.mode == "search":
                         expert, planner_info = search_planner.recommend(data, controller)
+                        if room_search is not None:
+                            planner_info.update(room_search_mode=search_decision['mode'],
+                                                room_search_index=room_search.room_index)
                     else:
                         # The first stable bridge keeps the target initially in
                         # front. A small heading label is retained for the VLA
@@ -1022,8 +1627,23 @@ def main() -> None:
                             bearing=bearing,
                         )
                 if step >= args.warmup_steps:
+                    if motion_teacher is not None:
+                        expert, motion_info = motion_teacher.command(
+                            expert, xy=base_xy, yaw=base_yaw,
+                            local_goal=planner_info.get('planning_goal', search_planner.target_xy),
+                            lidar=planar_lidar(model, data),
+                            scan=search_decision is not None and search_decision['mode'] == 'scan')
+                        motion_trace.append(motion_info)
                     min_distance = min(min_distance, distance)
                     min_height = min(min_height, float(data.qpos[2]))
+                    w, x, y, z = (float(value) for value in data.qpos[3:7])
+                    roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+                    pitch = math.asin(float(np.clip(2.0 * (w * y - z * x), -1.0, 1.0)))
+                    max_abs_roll_deg = max(max_abs_roll_deg, abs(math.degrees(roll)))
+                    max_abs_pitch_deg = max(max_abs_pitch_deg, abs(math.degrees(pitch)))
+                    vertical_velocities.append(float(data.qvel[2]))
+                    roll_rates.append(float(data.qvel[3]))
+                    pitch_rates.append(float(data.qvel[4]))
                     if target_visible_now:
                         target_visible_steps += 1
                         if target_first_visible_step < 0:
@@ -1039,25 +1659,70 @@ def main() -> None:
                         # physical state. This is essential for closed-loop BC.
                         index = collected_steps
                         assert renderer is not None and front is not None and rear is not None and lidar is not None and proprio is not None and action is not None
-                        renderer.update_scene(data, camera="front_rgb")
-                        front[index] = renderer.render().copy()
-                        renderer.update_scene(data, camera="rear_rgb")
-                        rear[index] = renderer.render().copy()
+                        if room_search is None:
+                            renderer.update_scene(data, camera="front_rgb")
+                            front[index] = renderer.render().copy()
+                            renderer.update_scene(data, camera="rear_rgb")
+                            rear[index] = renderer.render().copy()
+                        else:
+                            front[index] = observed_front
+                            rear[index] = observed_rear
+                        if index == 0:
+                            initial_target_pixels = target_pixel_count(front[index], plan.target_label) + target_pixel_count(rear[index], plan.target_label)
                         lidar[index] = planar_lidar(model, data)
                         proprio[index] = proprioception(model, data)
                         action[index] = expert.astype(np.float32)
                         if video is not None:
-                            video.stdin.write(front[index].tobytes())
+                            if args.video_view == "third_person":
+                                assert demo_renderer is not None
+                                target_lookat = np.asarray(data.qpos[:3], dtype=np.float64).copy()
+                                target_lookat[2] = 0.50
+                                smoothed_demo_lookat = (
+                                    (1.0 - args.demo_camera_smoothing) * smoothed_demo_lookat
+                                    + args.demo_camera_smoothing * target_lookat
+                                )
+                                third_camera.lookat[:] = smoothed_demo_lookat
+                                demo_renderer.update_scene(data, camera=third_camera)
+                                video.stdin.write(demo_renderer.render().tobytes())
+                            else:
+                                video.stdin.write(front[index].tobytes())
                     collected_steps += 1
+                    terminal_stop_steps = _update_search_stop_tail(terminal_stop_steps, expert)
+                    if room_search is not None:
+                        teacher_trace.append((collected_steps - 1, *base_xy, base_yaw, observed_pixels,
+                            room_search.discovered, room_search.room_index, room_search.completed_room_scans,
+                            room_search.swept, {'explore': 0, 'scan': 1, 'target': 2, 'handoff': 3}[search_decision['mode']],
+                            *search_planner.target_xy, *expert,
+                            *planner_info.get('planning_goal', search_planner.target_xy),
+                            planner_info.get('global_waypoint_index', -1),
+                            planner_info.get('global_plan_reachable', -1)))
                 controller.step(data, expert)
+                if step >= args.warmup_steps:
+                    contacts = _contacting_obstacles(model, data, obstacle_geom_ids)
+                    if contacts:
+                        obstacle_contact_steps += 1
+                        obstacle_contact_names.update(contacts)
+                    if room_search is not None:
+                        teacher_trace[-1] += (*data.qpos[:2], len(contacts))
+                    if responsive and collected_steps % 250 == 0:
+                        print(json.dumps({'teacher_motion_progress': dict(
+                            episode_id=plan.episode_id, step=collected_steps,
+                            phase=motion_info['phase'], action=expert.tolist(),
+                            xy=data.qpos[:2].tolist(), target_distance=distance,
+                            discovered=room_search.discovered,
+                            pixels=observed_pixels, contact_steps=obstacle_contact_steps)}), flush=True)
                 if (
                     args.mode == "search"
                     and args.search_stop_after_success
                     and reached_step >= 0
-                    and (step - args.warmup_steps) >= reached_step + args.search_success_hold_steps
+                    and terminal_stop_steps >= args.search_success_hold_steps
                 ):
                     terminated_early = True
                     break
+            vertical_velocity_rms = float(np.sqrt(np.mean(np.square(vertical_velocities))))
+            roll_rate_rms = float(np.sqrt(np.mean(np.square(roll_rates))))
+            pitch_rate_rms = float(np.sqrt(np.mean(np.square(pitch_rates))))
+            min_target_clearance = min_distance - ROBOT_FOOTPRINT_RADIUS_M - target_radius
             proprio_finite = True if proprio is None else bool(np.isfinite(proprio).all())
             success = bool(reached_step >= 0 and min_height >= 0.45 and proprio_finite)
         finally:
@@ -1066,6 +1731,10 @@ def main() -> None:
                 return_code = video.wait()
                 if return_code != 0:
                     raise RuntimeError(f"ffmpeg failed for {video_path}: {return_code}")
+            if renderer is not None:
+                renderer.close()
+            if demo_renderer is not None:
+                demo_renderer.close()
         task_language = _task_language_for(
             target_label=plan.target_label,
             episode_id=plan.episode_id,
@@ -1078,10 +1747,18 @@ def main() -> None:
             "collection_mode": args.mode,
             "search_policy": effective_search_policy if args.mode == "search" else "",
             "search_policy_requested": args.search_policy if args.mode == "search" else "",
+            "teacher_motion_profile": args.s3_motion_profile,
+            "action_contract": MOTION_CONTRACT if responsive else 'm20_body_command_legacy',
+            "training_ready": False if responsive else None,
+            "teacher_motion_recovery_count": motion_teacher.recovery_count if motion_teacher is not None else 0,
+            "teacher_scan_sweep_radians": room_search.sweep_radians if room_search is not None else None,
             "search_policy_effective": effective_search_policy if args.mode == "search" else "",
             "layout_id": plan.layout_id,
             "terrain_profile": plan.terrain_profile,
             "terrain_version": terrain.version if terrain is not None else "",
+            "scene_kind": plan.scene_kind,
+            "scene_name": plan.scene_name,
+            "scene_episode": args.scene_episode if plan.scene_kind in {"s2", "s3"} else "",
             "initial_yaw": plan.yaw,
             "initial_xy": [float(plan.start_xy[0]), float(plan.start_xy[1])],
             "scene_light": (
@@ -1102,6 +1779,8 @@ def main() -> None:
             "search_start_yaw_offset_rad": float(plan.search_start_yaw_offset),
             "search_start_yaw_offset_deg": float(math.degrees(plan.search_start_yaw_offset)),
             "metadata_only": args.metadata_only,
+            **_visible_approach_provenance(args, plan),
+            **_s3_assignment_provenance(args, plan),
             **task_language,
             "target_label": plan.target_label,
             "target_xy_privileged_label_only": plan.target_xy.tolist(),
@@ -1130,18 +1809,30 @@ def main() -> None:
             "terminated_early": terminated_early,
             "search_stop_after_success": args.search_stop_after_success,
             "search_success_hold_steps": args.search_success_hold_steps,
+            "search_terminal_stop_steps": terminal_stop_steps,
             "warmup_steps": args.warmup_steps,
             "success": success,
             "target_reached_step": reached_step,
             "canonical_target_reached_step": canonical_reached_step,
             "min_target_distance": min_distance,
+            "min_target_clearance": min_target_clearance,
             "min_base_height": min_height,
+            "max_abs_roll_deg": max_abs_roll_deg,
+            "max_abs_pitch_deg": max_abs_pitch_deg,
+            "vertical_velocity_rms_mps": vertical_velocity_rms,
+            "roll_rate_rms_radps": roll_rate_rms,
+            "pitch_rate_rms_radps": pitch_rate_rms,
+            "obstacle_contact_step_count": obstacle_contact_steps,
+            "obstacle_contact_names": sorted(obstacle_contact_names),
+            "final_xy": [float(data.qpos[0]), float(data.qpos[1])],
+            "episode_displacement_m": float(np.linalg.norm(data.qpos[:2] - plan.start_xy)),
             "task_object_collisions": task_object_collisions,
             "success_radius": curriculum_success_radius if args.mode == "search" else canonical_success_radius,
             "canonical_success_radius": canonical_success_radius,
             "curriculum_success_radius": curriculum_success_radius,
             "search_required": plan.search_required,
             "initial_target_visible": plan.initial_target_visible,
+            "initial_target_pixels_policy_rgb": initial_target_pixels,
             "search_layout_template_id": plan.search_template_id,
             "search_obstacle_template_id": plan.search_obstacle_template_id,
             "search_secondary_obstacle_template_id": plan.search_secondary_obstacle_template_id,
@@ -1190,7 +1881,15 @@ def main() -> None:
             ),
             "min_obstacle_clearance": min_obstacle_clearance,
             "planner": planner_info if args.mode == "search" else {},
+            **({'teacher_rgb_discovery_step': rgb_discovery_step,
+                'teacher_completed_room_scans': explored_room_scans,
+                'teacher_pre_discovery_goal_source': 'fixed_room_geometry_tour',
+                'teacher_discovery_min_pixels': room_search.min_pixels,
+                'teacher_discovery_confirmation_observations': room_search.confirmation_observations}
+               if room_search is not None else {}),
             "video": str(video_path) if args.video else "",
+            "video_view": args.video_view if args.video else "",
+            "video_resolution": {"width": int(video_width), "height": int(video_height)},
             "policy_input": ["front_rgb", "rear_rgb", "planar_lidar_72", "proprioception_45", "language"],
             "policy_input_resolution": {"width": int(args.policy_width), "height": int(args.policy_height)},
             "prohibited_policy_input": ["target_xy", "object_id", "semantic_mask", "privileged_bearing"],
@@ -1198,7 +1897,85 @@ def main() -> None:
                 canonical_reached_step >= 0 and min_height >= 0.45
             ),
         }
-        (args.output_dir / f"episode_{plan.episode_id:04d}.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        quality_gates = {
+            "search_reached_and_held": args.mode != "search" or (
+                success and terminal_stop_steps >= args.search_success_hold_steps
+            ),
+            "visible_approach_initial_rgb": plan.search_start_variant != "visible-approach" or (
+                initial_target_pixels is not None and initial_target_pixels >= 5
+            ),
+            "min_base_height": min_height >= float(args.quality_min_base_height_m),
+            "max_abs_roll": max_abs_roll_deg <= float(args.quality_max_abs_roll_deg),
+            "max_abs_pitch": max_abs_pitch_deg <= float(args.quality_max_abs_pitch_deg),
+            "vertical_velocity_rms": (
+                vertical_velocity_rms <= float(args.quality_max_vertical_velocity_rms_mps)
+            ),
+            "roll_rate_rms": roll_rate_rms <= float(args.quality_max_roll_rate_rms_radps),
+            "pitch_rate_rms": pitch_rate_rms <= float(args.quality_max_pitch_rate_rms_radps),
+            "target_clearance": min_target_clearance >= float(args.quality_min_target_clearance_m),
+            "obstacle_contact_within_budget": (
+                obstacle_contact_steps <= int(args.quality_max_obstacle_contact_steps)
+            ),
+            "search_displacement": (
+                args.mode != "search"
+                or float(np.linalg.norm(data.qpos[:2] - plan.start_xy))
+                >= float(args.quality_min_search_displacement_m)
+            ),
+        }
+        metadata["quality_thresholds"] = {
+            "min_base_height_m": float(args.quality_min_base_height_m),
+            "max_abs_roll_deg": float(args.quality_max_abs_roll_deg),
+            "max_abs_pitch_deg": float(args.quality_max_abs_pitch_deg),
+            "max_vertical_velocity_rms_mps": float(args.quality_max_vertical_velocity_rms_mps),
+            "max_roll_rate_rms_radps": float(args.quality_max_roll_rate_rms_radps),
+            "max_pitch_rate_rms_radps": float(args.quality_max_pitch_rate_rms_radps),
+            "min_target_clearance_m": float(args.quality_min_target_clearance_m),
+            "max_obstacle_contact_steps": int(args.quality_max_obstacle_contact_steps),
+            "min_search_displacement_m": float(args.quality_min_search_displacement_m),
+        }
+        metadata["quality_gates"] = quality_gates
+        metadata["quality_passed"] = all(quality_gates.values())
+        if room_search is not None:
+            trace_path = args.output_dir / f"teacher_trace_{plan.episode_id:04d}.npz"
+            columns = ('step', 'pre_x', 'pre_y', 'pre_yaw', 'target_rgb_pixels', 'discovered',
+                       'room_index', 'completed_scans', 'net_scan_yaw', 'mode', 'goal_x', 'goal_y',
+                       'forward', 'lateral', 'yaw_command', 'stop', 'route_goal_x', 'route_goal_y',
+                       'route_waypoint_index', 'route_reachable', 'post_x', 'post_y', 'contact_count')
+            trace = np.asarray(teacher_trace, dtype=np.float64).reshape((-1, len(columns)))
+            np.savez_compressed(trace_path, **{key: trace[:, i] for i, key in enumerate(columns)})
+            metadata['teacher_diagnostic_trace'] = str(trace_path)
+            metadata['teacher_diagnostic_trace_policy_input'] = False
+            if rgb_discovery_step >= 2:
+                discovery_path = args.output_dir / f"teacher_discovery_rgb_{plan.episode_id:04d}.npz"
+                indices = np.arange(rgb_discovery_step - 2, rgb_discovery_step + 1)
+                np.savez_compressed(discovery_path, step=indices,
+                                    front_rgb=front[indices], rear_rgb=rear[indices])
+                metadata['teacher_discovery_rgb_diagnostic'] = str(discovery_path)
+        if motion_trace:
+            motion_path = args.output_dir / f"teacher_motion_{plan.episode_id:04d}.npz"
+            np.savez_compressed(motion_path, **{key: np.asarray([row[key] for row in motion_trace]) for key in motion_trace[0]})
+            metadata['teacher_motion_trace_diagnostic_only'] = str(motion_path)
+        if not metadata["quality_passed"]:
+            if responsive and collect_arrays:
+                diagnostic_path = args.output_dir / f"rejected_rgb_{plan.episode_id:04d}.npz"
+                np.savez_compressed(diagnostic_path, front_rgb=front[:collected_steps], rear_rgb=rear[:collected_steps],
+                                    lidar=lidar[:collected_steps], proprio=proprio[:collected_steps], action=action[:collected_steps])
+                metadata['rejected_full_rgb_diagnostic_only'] = str(diagnostic_path)
+            rejected_summaries.append(metadata)
+            rejected_metadata_path.write_text(
+                json.dumps(metadata, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            if args.overwrite:
+                out.unlink(missing_ok=True)
+                episode_metadata_path.unlink(missing_ok=True)
+            print(json.dumps({"rejected_episode": metadata}, ensure_ascii=False), flush=True)
+            if not responsive:
+                video_path.unlink(missing_ok=True)
+                scene_path.unlink(missing_ok=True)
+            continue
+        episode_metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        rejected_metadata_path.unlink(missing_ok=True)
         if collect_arrays:
             assert front is not None and rear is not None and lidar is not None and proprio is not None and action is not None
             np.savez_compressed(
@@ -1212,10 +1989,48 @@ def main() -> None:
         summaries.append(metadata)
         print(json.dumps(metadata, ensure_ascii=False), flush=True)
         scene_path.unlink(missing_ok=True)
+    # Re-scan the canonical directory so parallel layout shards converge on a
+    # complete summary. Episode IDs are disjoint across layout offsets.
+    summaries = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(args.output_dir.glob("episode_*.json"))
+    ]
+    rejected_summaries = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(args.output_dir.glob("rejected_episode_*.json"))
+    ]
+    if args.plan_only:
+        # A declared set has no rollout fields (no ``success``, no motion stats),
+        # so it gets its own summary instead of the collected-dataset one.
+        summary = {
+            "schema": "m20pro_mujoco_vla_dataset_v1",
+            "plan_only": True,
+            "scene": args.scene,
+            "visible_approach_pose_refusals": getattr(args, "visible_approach_pose_refusals", []),
+            "scene_episode": args.scene_episode,
+            "episode_count": len(summaries),
+            "episodes": summaries,
+        }
+        (args.output_dir / "dataset_summary.json").write_text(
+            json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+        )
+        print(
+            json.dumps(
+                {
+                    "dataset": str(args.output_dir),
+                    "plan_only_episodes": len(summaries),
+                    "episode_ids": [item["episode_id"] for item in summaries],
+                },
+                indent=2,
+            ),
+            flush=True,
+        )
+        return
     terrain_profiles = sorted({str(item.get("terrain_profile", "")) for item in summaries if item.get("terrain_profile")})
     summary = {
         "schema": "m20pro_mujoco_vla_dataset_v1",
         "episodes": summaries,
+        "visible_approach_pose_refusals": getattr(args, "visible_approach_pose_refusals", []),
         "success_count": sum(item["success"] for item in summaries),
         "canonical_success_count": sum(bool(item.get("canonical_success", False)) for item in summaries),
         "target_discovered_count": sum(bool(item.get("target_discovered", False)) for item in summaries),
@@ -1226,6 +2041,8 @@ def main() -> None:
         }),
         "terrain_profiles": terrain_profiles,
         "policy_input_resolution": {"width": int(args.policy_width), "height": int(args.policy_height)},
+        "rejected_episode_count": len(rejected_summaries),
+        "rejected_episodes": rejected_summaries,
     }
     (args.output_dir / "dataset_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"dataset": str(args.output_dir), "episodes": len(summaries), "success_count": summary["success_count"]}, indent=2))

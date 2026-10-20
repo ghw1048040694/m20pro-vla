@@ -407,9 +407,21 @@ def main():
     parser.add_argument("--min-distribution-languages", type=int, default=2)
     parser.add_argument("--min-distribution-search-anchor-episodes", type=int, default=1)
     parser.add_argument("--min-distribution-search-varied-episodes", type=int, default=1)
+    parser.add_argument(
+        "--min-distribution-search-structured-episodes",
+        type=int,
+        default=0,
+        help=(
+            "Structured scenes (S2/S3) replace the anchor/varied start-pose curriculum with a "
+            "resampled building, so they report search_start_variant='structured'. When this is "
+            "positive the anchor/varied gate may be satisfied by that count instead. 0 (default) "
+            "disables the clause and leaves the historical gate untouched."
+        ),
+    )
     parser.add_argument("--min-distribution-search-successes", type=int, default=1)
     parser.add_argument("--min-distribution-target-discovered", type=int, default=1)
     parser.add_argument("--min-distribution-search-clearance-m", type=float, default=0.10)
+    parser.add_argument("--min-distribution-search-displacement-m", type=float, default=0.50)
     parser.add_argument(
         "--init-checkpoint",
         type=Path,
@@ -454,9 +466,11 @@ def main():
         min_languages=args.min_distribution_languages,
         min_search_anchor_episodes=args.min_distribution_search_anchor_episodes,
         min_search_varied_episodes=args.min_distribution_search_varied_episodes,
+        min_search_structured_episodes=args.min_distribution_search_structured_episodes,
         min_search_successes=args.min_distribution_search_successes,
         min_target_discovered=args.min_distribution_target_discovered,
         min_search_clearance_m=args.min_distribution_search_clearance_m,
+        min_search_displacement_m=args.min_distribution_search_displacement_m,
     )
     distribution_audit = audit_m20_mujoco_dataset(args.dataset, thresholds=distribution_thresholds)
     if args.require_distribution_gate and not distribution_audit["passed"]:
@@ -534,6 +548,7 @@ def main():
         "min_languages": args.min_distribution_languages,
         "min_search_anchor_episodes": args.min_distribution_search_anchor_episodes,
         "min_search_varied_episodes": args.min_distribution_search_varied_episodes,
+        "min_search_structured_episodes": args.min_distribution_search_structured_episodes,
         "min_search_successes": args.min_distribution_search_successes,
         "min_target_discovered": args.min_distribution_target_discovered,
         "min_search_clearance_m": args.min_distribution_search_clearance_m,

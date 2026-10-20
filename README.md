@@ -118,13 +118,14 @@ MuJoCo VLA 代码已经工程化为可安装包 `src/m20pro_vla/`。底层执行
 工程目录、长期接口和产物规则见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，
 完整目录职责见 [`docs/PROJECT_LAYOUT.md`](docs/PROJECT_LAYOUT.md)，
 低层控制合同见 [`configs/m20pro_low_level_v1.yaml`](configs/m20pro_low_level_v1.yaml)。
-历史脚本路径保留为兼容入口，但新代码必须从 `m20pro_vla` 包导入。
+新代码必须从 `m20pro_vla` 包导入；不得为单次实验复制训练或评估脚本。
 历史 MuJoCo checkpoint 的 `global_v1` 视觉头与当前 `spatial_v2` 均可由回放入口自动识别。
 
-### 统一运行入口（当前已迁移的门禁）
+### 单配置实验入口
 
-项目不再要求为每次门禁新写一个实验脚本。先在 `m20pro-vla` 环境中安装
-当前包，然后用统一 CLI：
+每个实验只新增或复制一个 JSON 配置，不新增 Python/Shell 脚本。当前完整配置是
+`configs/experiment.json`，它同时包含路径、采集、数据门槛、
+训练超参、评估参数和晋级标准。
 
 ```bash
 python -m pip install -e . --no-deps
@@ -132,18 +133,69 @@ m20pro-vla doctor
 m20pro-vla prepare
 m20pro-vla smoke
 m20pro-vla low-level-gate
-m20pro-vla collect --mode randomized --episodes 1
-m20pro-vla train --help
-m20pro-vla eval --help
-m20pro-vla play --help
+m20pro-vla experiment --config configs/experiment.json --stage plan
+m20pro-vla experiment --config configs/experiment.json --stage collect
+m20pro-vla experiment --config configs/experiment.json --stage collect-recovery
+m20pro-vla experiment --config configs/experiment.json --stage curate
+m20pro-vla experiment --config configs/experiment.json --stage audit
+m20pro-vla experiment --config configs/experiment.json --stage convert
+m20pro-vla experiment --config configs/experiment.json --stage train
+m20pro-vla experiment --config configs/experiment.json --stage train-smolvla
+m20pro-vla experiment --config configs/experiment.json --stage smolvla-eval
+m20pro-vla experiment --config configs/experiment.json --stage eval
+m20pro-vla experiment --config configs/experiment.json --stage gate
 m20pro-vla report
 ```
 
 每次运行会自动创建 `.runtime/runs/M20-*/`，保存 `config.json`、
 `command.txt`、`status.json`、`summary.json` 及预留的数据/模型/视频目录。
-`--dry-run` 只检查计划，不占用磁盘。采集、审计、转换、训练、评估、播放
-也可以从同一 CLI 进入；当前这些命令会记录 run context 后转发到
-`scripts/mujoco/` 的兼容实现，待对应包 API 迁移并通过同一合同测试后再收口。
+`plan` 和 `--dry-run` 只检查计划，不占用训练资源。每个执行阶段自动写入 run context；
+训练阶段拒绝覆盖已有 checkpoint，必须为新实验设置新的 `experiment_id` 和输出路径。
+`convert` 将M20 NPZ轨迹转换为标准LeRobotDataset；`train-smolvla` 在配置指定的
+`lerobot` conda环境中调用官方训练器。二者仍由同一JSON和统一CLI调度。
+`collect-recovery` 从失败闭环中的安全状态采集专家续跑，只保存通过到达、姿态与零碰撞
+门槛的轨迹；`curate` 过滤未移动的旧采集轨迹，并用符号链接组合有效数据，不复制视频。
+
+### 标准训练与晋级门禁
+
+实验配置只允许在 WSL2 + CUDA 环境中启动训练，并在训练前强制检查 episode/NPZ 配对、
+布局、地形、语言、anchor/varied 起点、成功轨迹、目标发现和障碍净距。训练完成后不能凭
+loss 导出，必须继续运行同一配置的 `eval` 和 `gate` 阶段。
+
+```bash
+m20pro-vla experiment --config configs/experiment.json --stage gate
+```
+
+该门禁同时检查 layout-disjoint 离线指标和 learner-only 隐藏目标闭环指标。只有
+`eligible_for_shadow=true` 才允许执行 `export-policy --target-runtime shadow`；shadow
+仍然只记录建议，不控制机器人。每张 DDDMR 地图不单独训练 LoRA。
+
+
+### 面向 M20Pro-3D-Nav 的 VLA 导出合同
+
+VLA 不按每张 DDDMR 地图做 LoRA。DDDMR 地图负责几何定位、三维地图和执行安全；
+VLA 负责语言、视觉目标和局部短目标/机身命令。只有相机安装、场景外观、目标类别或
+任务分布发生明显变化时，才考虑 domain/site 级 adapter。
+
+训练得到的 checkpoint 先导出为实机 bridge 可读的 manifest，而不是直接拷到真机控制链路：
+
+```bash
+m20pro-vla export-policy \
+  --checkpoint .runtime/checkpoints/<run>/best.pt \
+  --target-runtime shadow \
+  --output-dir .runtime/exports/<policy-id>
+```
+
+默认只记录 checkpoint 路径和 SHA-256，不复制大权重；需要形成自包含交付包时再显式加
+`--copy-checkpoint`。导出目录包含：
+
+- `manifest.json`：模型、观测、动作、安全和 M20Pro-3D-Nav 消费方式；
+- `m20pro_real_vla_deploy_contract_v1.yaml`：两仓库握手合同；
+- 可选 checkpoint copy。
+
+实机第一消费者应是 `M20Pro-3D-Nav` 的 `m20pro_vla_bridge` shadow mode。通过 shadow
+录包/日志验证后，优先让 VLA 输出短距离 `/navigate_to_pose_3d` 子目标给 DDDMR 执行；
+直接速度模式必须经过 command supervisor 和 command mux。
 
 ### 当前验收边界
 
@@ -151,38 +203,3 @@ m20pro-vla report
 后续训练仅使用随机多物体场景的 RGB、LiDAR、本体状态和语言；每次闭环验收
 必须保存 H.264 视频、逐 episode JSON 与独立随机布局汇总。统一项目记录位于
 [`../../notes/Lerobot.md`](../../notes/Lerobot.md)。
-
-### 历史 Isaac/SmolVLA 路径（不作为当前主线）
-
-旧的小型 CNN/字节文本行为克隆网络只保留为 M20 低层运动基线，不再作为
-VLA 主线。新的高层策略使用官方 `lerobot/smolvla_base`（固定 revision
-`c83c316`），LeRobot 环境位于 2 TB 盘，并复用已验证的 PyTorch
-2.7/CUDA 12.8 运行库，不修改 Isaac Sim 环境。
-
-检查官方 checkpoint 完整性、严格加载和一次三视角 action-chunk 推理：
-
-```bash
-./scripts/check_smolvla.sh
-```
-
-该命令只验证预训练 VLA 在 RTX 3060 12 GB 上可运行，不代表已经完成导航。
-在转换或微调前对现有 HDF5 轨迹做结构、时序和任务覆盖审计：
-
-```bash
-./scripts/audit_m20_smolvla_data.sh
-```
-
-审计未通过时不启动 SmolVLA 微调。
-可见目标 ObjectNav 的随机室内场景清单与正式采集入口为：
-
-```bash
-python3 scripts/build_m20_objectnav_manifest.py
-./scripts/collect_m20_visible_objectnav.sh train_0000
-./scripts/audit_m20_smolvla_data.sh
-```
-
-清单将训练/验证/测试场景和指令模板隔离，墙体、家具和 YCB
-目标网格均进入 MultiMesh LiDAR。每条轨迹包含统一动作前时间戳、6 维
-高层动作、目标实际可见像素验证、JSON 指标和 H.264 视频。
-多房间、未见物体、隐藏目标搜索和 1 m 障碍的验收定义位于
-`configs/m20pro_vla_eval_v1.yaml`，必须以闭环成功率和逐 episode H.264 视频验收。

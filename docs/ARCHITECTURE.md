@@ -13,15 +13,16 @@ src/m20pro_vla/
   sim/             # MuJoCo scene construction, sensors, assets
   policies/        # VLA and future learned locomotion adapters; no joint I/O
   data/            # dataset schemas and conversion
+  training/        # standard training and promotion gates
+  deploy/          # real-robot export contracts
+  runtime/         # run lifecycle and one-config experiment orchestration
   utils/           # shared utilities
 configs/           # versioned input/output and safety contracts
-scripts/mujoco/    # compatibility MuJoCo entry points during CLI migration
-scripts/           # ROS, legacy Isaac, and compatibility CLI entry points
+scripts/mujoco/    # five generic MuJoCo executors used by the CLI
+scripts/           # environment setup and ROS simulator operations only
 tests/             # import and contract gates
 docs/              # architecture and operational decisions
 .runtime/          # ignored local datasets, checkpoints, metrics, video
-assets/            # Isaac Lab asset configuration retained for compatibility
-tasks/             # Isaac Lab task definitions retained for compatibility
 ```
 
 ## Unified CLI and Run Lifecycle
@@ -31,13 +32,14 @@ The user-facing command is `m20pro-vla`, registered by `pyproject.toml`.
 for the migrated gates:
 
 ```text
-doctor -> prepare -> smoke -> low-level-gate -> collect -> audit -> convert
-                                                       -> train -> eval -> play -> report
+doctor -> prepare -> smoke -> low-level-gate
+experiment config -> collect -> audit -> train -> eval -> gate
+report / export-policy
 ```
 
 Each invocation writes a timestamped run directory under `.runtime/runs/` with
 the exact command, git revision, configuration snapshot, status, and summary.
-`collect`, `audit`, `convert`, `train`, `eval`, and `play` are currently
+`collect`, `audit`, `train`, `eval`, and `play` are currently
 recorded compatibility adapters in `m20pro_vla.runtime.compat`. They stream
 stdout/stderr into the same run directory and preserve exit codes while their
 business logic is moved to `src/m20pro_vla`; they must not create a second
@@ -66,13 +68,10 @@ Flat-ground yaw uses the calibrated positive/negative target slew values in
 The controller also feeds measured body yaw rate back into the differential
 wheel target, so a sustained command does not keep increasing angular speed.
 
-The same controller now has a terrain-contact recovery path. Named MuJoCo
+The same controller has a terrain-contact recovery path. Named MuJoCo
 terrain contacts can trigger a bounded wheel-edge lift, traction boost, stronger
 stance feedback, and a tilt safety stop; this is internal execution logic and
 does not add terrain labels or target information to the body-command contract.
-The versioned rough-terrain gate is `m20pro_low_level_rough_terrain_gate_v1` and
-is run by `scripts/mujoco/evaluate_m20_rough_terrain_controller.py`.
-
 Every high-level policy, including SmolVLA, Pi0.5, world-model MPC, offline
 experts, and evaluation replayers, must emit this body command and invoke the
 same controller. A future learned rough-terrain locomotion policy may replace
@@ -86,3 +85,7 @@ runtime artifacts belong under `.runtime/` and are not committed. Every model
 claim needs a versioned config, machine-readable metric report, and decoded
 video when rendering is relevant. No VLA training is allowed to bypass the
 low-level controller or use target poses as policy input.
+
+An experiment is represented by one `m20pro_vla_experiment_v1` JSON file.
+Changing a seed, dataset, loss weight, decision mode, or threshold creates a
+new versioned config, never a copied Python training/evaluation script.
